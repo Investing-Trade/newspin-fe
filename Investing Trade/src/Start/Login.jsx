@@ -1,47 +1,43 @@
 import React, { useState } from 'react';
-// 이미지 경로가 assets 폴더 안에 있는지 확인하세요!
 import businessMan from '../assets/bussiness-man.png'; 
 import webAnalytics from '../assets/web-analytics.png';
 
-const LoginPage = () => {
+const Login = () => {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-row items-center justify-center p-4">
-      {/* 1. 메인 카드 컨테이너 */}
-      <div className="bg-white rounded-2xl shadow-2xl flex flex-row w-full max-w-4xl overflow-hidden min-h-[580px]">
+    // 전체 화면 고정 및 중앙 정렬
+    <div className="h-screen w-full flex items-center justify-center p-8 md:p-12">
+      
+      {/* 메인 카드: flex-row를 통해 무조건 가로로 배치 */}
+      <div className="bg-white rounded-[2rem] border border-gray-300 shadow-2xl flex flex-row w-full max-w-5xl h-full max-h-[750px] overflow-hidden">
         
-        {/* 2. 왼쪽 섹션: 서비스 소개 (Blue Gradient) */}
-        <div className="hidden md:flex md:w-1/2 bg-gradient-to-b from-[#5D6DED] to-[#7199F1] p-10 text-white flex-col justify-between">
-          <div >
-            {/* 서비스 로고: Agbalumo 폰트 적용 */}
-            <h1 className="text-5xl text-center font-agbalumo italic mb-12 tracking-tight">NewsPin</h1>
+        {/* 왼쪽 섹션: 서비스 소개 (너비 50% 고정) */}
+        <div className="w-1/2 bg-gradient-to-b from-[#5D6DED] to-[#7199F1] p-10 text-white flex flex-col justify-between">
+          <div className="text-center">
+            <h1 className="text-5xl font-agbalumo italic mb-8 leading-none">NewsPin</h1>
             
-            {/* 이미지 배치 영역: absolute를 활용해 겹침 효과 구현 */}
-            <div className="relative flex flex-row h-48 mt-10">
-              {/* 캐릭터 이미지 (왼쪽 하단 레이어) */}
-              <img 
-                src={businessMan} 
-                alt="business" 
-                className="w-16 left-2 top-4 drop-shadow-lg"
-              />
-              
-              {/* 데이터 분석 이미지 (중앙/우측 상단 레이어) */}
-              <img 
-                src={webAnalytics} 
-                alt="graph" 
-                className="w-56 z-10  right-0 top-0 drop-shadow-xl opacity-90"
-              />
-
-              {/* 배경 장식 원형 (선택 사항) */}
+            {/* 이미지 레이아웃: 크기 축소 및 정렬 */}
+            <div className="relative flex justify-center items-center h-44 mt-4">
+              <div className='relative w-full flex justify-center items-end h-full'>
+                <img 
+                  src={businessMan} 
+                  alt="business" 
+                  className="w-20 z-20 absolute left-8 bottom-0 drop-shadow-2xl"
+                />
+                <img 
+                  src={webAnalytics} 
+                  alt="graph" 
+                  className="w-20 z-10 drop-shadow-2xl opacity-95 translate-x-4"
+                />
+              </div>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
             </div>
           </div>
 
-          {/* 하단 설명 문구 */}
-          <div className="space-y-3 mt-auto">
-            <p className="text-xl font-medium leading-snug">
+          <div className="space-y-3 mt-6">
+            <p className="text-lg font-medium leading-snug">
               <span className="font-agbalumo">NewsPin</span>은 뉴스 기반 투자 학습 플랫폼입니다.
             </p>
             <div className="text-sm opacity-90 leading-relaxed font-light">
@@ -49,69 +45,56 @@ const LoginPage = () => {
               <p>
                 <span className="font-bold text-yellow-300">AI 피드백</span>으로 분석 감각을 키워보세요.
               </p>
-              <p className="mt-2 text-xs">실제 데이터를 활용한 모의 투자로 안전한 실전 학습을 경험할 수 있습니다.</p>
+              <p className="mt-2 text-xs opacity-75">실제 데이터를 활용한 모의 투자로 안전한 실전 학습을 경험할 수 있습니다.</p>
             </div>
           </div>
         </div>
 
-        {/* 3. 오른쪽 섹션: 로그인 폼 */}
+        {/* 오른쪽 섹션: 로그인 폼 (너비 50% 고정) */}
         <div className="w-1/2 p-12 flex flex-col justify-center bg-white">
-          <h2 className="text-4xl font-bold text-center mb-12 text-gray-800 tracking-tighter">로그인</h2>
+          <h2 className="text-4xl font-bold text-center mb-10 text-gray-800 tracking-tighter">로그인</h2>
           
           <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
-            {/* 아이디 필드 */}
             <div className="space-y-2">
-              <label className="block text-[16px] font-bold text-gray-700 ml-1">아이디</label>
+              <label className="block text-sm font-bold text-gray-700 ml-1">아이디</label>
               <div className="relative">
                 <input 
                   type="text" 
-                  value={id}
-                  onChange={(e) => setId(e.target.value)}
                   placeholder="아이디를 입력해주세요." 
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5D6DED] transition-all placeholder:text-gray-300 text-sm"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#5D6DED] outline-none transition-all text-sm"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-gray-400">👁️</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">👁️</span>
               </div>
             </div>
 
-            {/* 비밀번호 필드 */}
             <div className="space-y-2">
-              <label className="block text-[16px] font-bold text-gray-700 ml-1">비밀번호</label>
+              <label className="block text-sm font-bold text-gray-700 ml-1">비밀번호</label>
               <div className="relative">
                 <input 
                   type="password" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="비밀번호를 입력해주세요." 
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5D6DED] transition-all placeholder:text-gray-300 text-sm"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#5D6DED] outline-none transition-all text-sm"
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                   <span className="cursor-pointer text-gray-400">👁️</span>
-                   <span className="text-gray-300 font-light">|</span>
-                   <span className="cursor-not-allowed text-gray-400">🚫</span>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-gray-400">
+                   <span>👁️</span><span>|</span><span>🚫</span>
                 </div>
               </div>
             </div>
 
-            {/* 하단 버튼 */}
-            <div className="pt-6 border-t border-gray-100 mt-8">
-              <button 
-                type="submit" 
-                className="w-full bg-[#6C7EEB] hover:bg-[#5A6CD1] text-white font-bold py-4 rounded-lg flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-indigo-100"
-              >
+            <div className="pt-6 border-t border-gray-100 mt-6">
+              <button className="w-full bg-[#6C7EEB] hover:bg-[#5A6CD1] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-transform">
                 <svg className="w-5 h-5 fill-current rotate-12" viewBox="0 0 24 24">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                 </svg>
-                <span className="text-lg font-medium">투자 여정 시작하기</span>
+                <span className="text-lg">투자 여정 시작하기</span>
               </button>
             </div>
           </form>
 
-          {/* 하단 보조 링크 */}
-          <div className="mt-10 flex justify-center items-center gap-6 text-sm font-bold text-gray-500">
-            <button className="hover:text-indigo-600 transition-colors">회원가입</button>
-            <span className="w-[1.5px] h-3 bg-gray-300"></span>
-            <button className="hover:text-indigo-600 transition-colors">비밀번호 찾기</button>
+          <div className="mt-8 flex justify-center items-center gap-6 text-sm font-bold text-gray-500">
+            <button className="hover:text-indigo-600">회원가입</button>
+            <span className="w-[1px] h-3 bg-gray-300"></span>
+            <button className="hover:text-indigo-600">비밀번호 찾기</button>
           </div>
         </div>
 
@@ -120,4 +103,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+export default Login;

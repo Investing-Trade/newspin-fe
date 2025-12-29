@@ -1,3 +1,26 @@
+/* src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 모든 요소의 크기 계산 방식 고정 */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%; /* 브라우저 높이에 딱 맞춤 */
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* 스크롤 절대 방지 */
+  background-color: white;
+}
+
+body {
+  /* outline 대신 border를 사용해야 하단이 잘리지 않습니다. */
+  border: 4px solid #d1d5db; 
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+}
