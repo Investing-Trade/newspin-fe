@@ -7,6 +7,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
+        berkshire: ['"Berkshire Swash"', 'cursive'],
         // Agbalumo 폰트 패밀리 등록
         agbalumo: ['Agbalumo', 'system-ui', 'sans-serif'],
       },
