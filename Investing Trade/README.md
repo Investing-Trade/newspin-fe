@@ -1,16 +1,19 @@
-# React + Vite
+## **서비스명: 뉴스핀**
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+- **목표:** 금융 및 주식에 관심은 있지만, 복잡한 정보와 진입 장벽 때문에 망설이는 20대 초중반 청년들을 위한 학습 기반 모의 투자 플랫폼. 실제 시장 뉴스를 분석하고 예측하는 경험을 통해 주식 투자의 기본 원리를 익힐 수 있도록 도움.
+- **타겟:** 경제 지식이 부족하거나 모호하고, 주식 투자를 시도하기 두려워하는 20대 청년층.
 
-Currently, two official plugins are available:
+### (1) 뉴스 분석 학습 서비스
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+이 기능은 주식 시장의 흐름을 이해하고, 정보를 분석하는 능력을 키우는 데 중점.
 
-## React Compiler
+- **뉴스 분석 퀴즈**: AI가 제공하는 뉴스 기사를 읽고, 해당 기사가 주식 시장에 **호재**인지 **악재**인지 분석하는 퀴즈를 제공합니다. AI의 감성 분석 점수(예: 긍정/부정 점수 1~100)와 해당 점수를 도출한 핵심 문장/맥락을 함께 제공하여 사용자의 판단을 돕고, 올바른 분석법을 학습..
+- **이벤트 분석 학습**: 코로나19 확산, 금리 인상 발표 등 주가에 큰 영향을 미치는 특정 **이벤트**들을 재구성하여, 해당 사건이 주식 시장에 어떤 영향을 미쳤는지 학습할 수 있는 콘텐츠를 제공합니다.
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+### (2) 모의 주식 투자 서비스
 
-## Expanding the ESLint configuration
+학습을 통해 얻은 지식을 실제 투자에 적용해보는 실전 시뮬레이션.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **기간별 모의 투자**: 2021년 상반기 3개월치와 같이 특정 기간의 실제 뉴스와 이벤트를 기반으로 모의 투자 환경을 조성합니다. 사용자는 해당 기간 동안 공개되는 뉴스를 분석하며 주식을 사고팔고, 포트폴리오를 관리합니다.
+- **AI 기반 투자 결과 분석**: 모의 투자 종료 후, AI가 사용자의 투자 방식을 분석해 'AI 투자 보고서'를 제공.
+    - **잘못된 판단 분석**: 특정 이벤트(예: 제약회사 호재 뉴스)를 잘못 분석하여 손실을 본 경우, "해당 뉴스를 오판하여 제약회사 주식을 매도함으로써 기회를 놓쳤습니다"와 같이 구체적인 피드백을 제공. 이는 사용자가 자신의 실수를 명확하게 인지하고 다음 투자에 반영할 수 있도록 도움.
