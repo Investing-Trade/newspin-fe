@@ -11,6 +11,7 @@ export default {
         permanent: ['"Permanent Marker"', 'cursive'],
         berkshire: ['"Berkshire Swash"', 'cursive'],
         agbalumo: ['Agbalumo', 'system-ui', 'sans-serif'],
+        jua: ['Jua', 'sans-serif'],
       },
       colors: {
         'brand-blue': '#5D6DED',

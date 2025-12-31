@@ -57,15 +57,15 @@ const Password = () => {
   };
 
   return (
-<div className="w-screen h-screen flex items-center justify-center bg-white overflow-hidden">      
+    <div className="w-screen h-screen flex items-center justify-center bg-white overflow-hidden">
       {/* 부모 카드 (높이를 필드 수에 맞춰 조정) */}
       <div className="bg-white rounded-3xl border border-gray-200 flex flex-row items-stretch w-full max-w-5xl h-[750px] overflow-hidden shadow-2xl">
-        
+
         {/* [왼쪽 섹션] */}
         <div className="flex-1 bg-blue-600 p-5 text-white flex flex-col justify-center items-center shrink-0">
           <h1 className="font-agbalumo text-6xl mb-40 pb-12 tracking-wider">NewsPin</h1>
           <div className="relative w-40 h-28 mb-6">
-            <img src={predictiveAnalytics} alt="predictive" className="w-48 h-auto z-15 absolute left-2 bottom-24 drop-shadow-lg" />
+            <img src={predictiveAnalytics} alt="predictive" className="w-48 h-auto z-15 absolute left-2 bottom-30 drop-shadow-lg" />
             <img src={businessMan} alt="man" className="w-48 h-auto z-10 absolute right-26 drop-shadow-lg" />
             <img src={webAnalytics} alt="chart" className="w-48 h-auto z-10 absolute left-28 top-0" />
           </div>
@@ -73,20 +73,20 @@ const Password = () => {
             <p className="text-center text-lg font-semibold font-agbalumo leading-relaxed py-2">NewsPin은 뉴스 투자 학습 플랫폼입니다.</p>
             <p className="text-center text-lg font-semibold leading-relaxed py-1">경제 뉴스를 읽고 호재 및 악재를 판단하며,</p>
             <p className="text-center text-lg font-semibold leading-relaxed py-1">AI 피드백으로 분석 감각을 키워보세요.</p>
-            <p className="text-center text-lg font-semibold leading-relaxed py-1">실제 데이터를 활용한 모의 투자로 안전한 학습을 경험할 수 있습니다.</p>            
+            <p className="text-center text-lg font-semibold leading-relaxed py-1">실제 데이터를 활용한 모의 투자로 안전한 학습을 경험할 수 있습니다.</p>
           </div>
         </div>
 
         {/* [오른쪽 섹션] */}
-        <div className="flex-1 p-12 flex flex-col justify-center bg-white shrink-0 ">
-          <h2 className="text-5xl font-bold text-center mb-16 text-gray-800">
+        <div className="flex-1 p-4 flex flex-col justify-center bg-white shrink-0 ">
+          <h2 className="text-5xl font-jua text-center mb-8 text-gray-800">
             {isCodeSent ? "비밀번호 재설정" : "비밀번호 찾기"}
           </h2>
-          
+
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             {/* 아이디 필드 */}
-            <div className="space-y-2">
-              <p className='font-bold text-lg pb-1'>아이디</p>
+            <div className="space-y-3">
+              <p className='font-jua text-lg pb-1'>아이디</p>
               <input
                 type="text"
                 readOnly={isCodeSent}
@@ -99,7 +99,7 @@ const Password = () => {
 
             {/* 이메일 필드 */}
             <div className="space-y-2">
-              <p className='font-bold text-lg pb-1'>이메일</p>
+              <p className='font-jua text-lg pb-1'>이메일</p>
               <input
                 type="text"
                 readOnly={isCodeSent}
@@ -113,36 +113,38 @@ const Password = () => {
               {errors.email && <p className="text-red-500 text-xs font-bold">{errors.email.message}</p>}
             </div>
 
+            <hr className='text-gray-500 my-8' />
+
+
             {/* 인증 코드 전송 버튼 */}
             {!isCodeSent && (
-              <button type="submit" className="w-full bg-blue-600 border border-white text-lg cursor-pointer text-white font-bold py-3 rounded-lg mt-4 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all">
+              <button type="submit" className="w-full bg-blue-600 border border-white text-lg cursor-pointer text-white font-jua py-3 rounded-lg mt-4 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all">
                 ✈️ 이메일로 인증 코드 전송
               </button>
             )}
 
-            <hr className='text-gray-500 my-4' />
 
             {/* --- 인증 코드 전송 후 나타나는 영역 --- */}
             {isCodeSent && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <p className='font-bold text-lg pb-1 text-blue-600'>인증 코드 입력</p>
-                  <input 
-                    type="text" 
-                    placeholder="인증 코드 6자리를 입력해주세요." 
+                  <p className='font-bold font-jua text-lg pb-1 text-blue-600'>인증 코드 입력</p>
+                  <input
+                    type="text"
+                    placeholder="인증 코드 6자리를 입력해주세요."
                     {...register("authCode", { required: "인증 코드를 입력해주세요." })}
                     className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('authCode')}`}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <p className='font-bold text-lg pb-1'>새로운 비밀번호</p>
-                  <input 
-                    type="password" 
-                    placeholder="새로운 비밀번호를 입력해주세요." 
-                    {...register("newPassword", { 
+                  <p className='font-jua text-lg pb-1'>새로운 비밀번호</p>
+                  <input
+                    type="password"
+                    placeholder="새로운 비밀번호를 입력해주세요."
+                    {...register("newPassword", {
                       required: "새 비밀번호를 입력해주세요.",
-                      pattern: { value: authRegex, message: "8자 이상 조합해주세요." }
+                      pattern: { value: authRegex, message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)" }
                     })}
                     className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPassword')}`}
                   />
@@ -150,11 +152,11 @@ const Password = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <p className='font-bold text-lg pb-1'>새 비밀번호 확인</p>
-                  <input 
-                    type="password" 
-                    placeholder="비밀번호를 다시 입력해주세요." 
-                    {...register("newPasswordConfirm", { 
+                  <p className='font-jua text-lg pb-1'>비밀번호 확인</p>
+                  <input
+                    type="password"
+                    placeholder="비밀번호를 다시 입력해주세요."
+                    {...register("newPasswordConfirm", {
                       required: "확인을 위해 다시 입력해주세요.",
                       validate: (val) => val === newPasswordValue || "비밀번호가 일치하지 않습니다."
                     })}
@@ -163,8 +165,8 @@ const Password = () => {
                   {errors.newPasswordConfirm && <p className="text-red-500 text-xs font-bold">{errors.newPasswordConfirm.message}</p>}
                 </div>
 
-                <button type="submit" className="w-full bg-green-600 text-white font-bold py-3 rounded-lg mt-4 shadow-md hover:bg-green-700 active:scale-[0.98] transition-all">
-                  ✅ 비밀번호 변경 완료
+                <button type="submit" className="w-full cursor-pointer bg-blue-600 text-white font-jua py-3 rounded-lg shadow-md hover:bg-blue-500 active:scale-[0.98] transition-all">
+                  비밀번호 변경 완료
                 </button>
               </div>
             )}

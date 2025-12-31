@@ -1,5 +1,6 @@
 /* src/index.css */
 @import "tailwindcss"; /* 최신 v4 방식: 기존 base, components, utilities를 대체합니다 */
+@import url('https://fonts.googleapis.com/css2?family=Jua&display=swap'); /* 이 줄이 반드시 있어야 합니다! */
 
 /* 1. 모든 요소의 박스 크기 계산 방식 고정 */
 *, *::before, *::after {
@@ -32,5 +33,8 @@ body {
   }
   .font-agbalumo {
     font-family: 'Agbalumo', system-ui;
+  }
+  .font-jua {
+    font-family: 'Jua', sans-serif;
   }
 }
