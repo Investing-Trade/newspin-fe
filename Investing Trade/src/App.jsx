@@ -5,7 +5,7 @@ import SignUp from './Start/SignUp.jsx'
 function App() {
   return (
     <div >
-      <Password/>
+      <Login/>
     </div>
   )
 }
