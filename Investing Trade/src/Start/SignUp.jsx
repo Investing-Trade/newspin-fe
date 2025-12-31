@@ -66,7 +66,7 @@ const SignUp = () => {
                     </div>
 
                     <div className='mt-16'>
-                        <p className="text-center text-lg font-semibold font-agbalumo leading-relaxed py-2 px-2">NewsPin은 뉴스 기반 투자 학습 플랫폼입니다.</p>
+                        <p className="text-center text-lg font-semibold font-agbalumo leading-relaxed py-2 px-2">NewsPin은 뉴스 투자 학습 플랫폼입니다.</p>
                         <p className="text-center text-lg font-semibold leading-relaxed py-1">경제 뉴스를 읽고 호재 및 악재를 판단하며,</p>
                         <p className="text-center text-lg font-semibold leading-relaxed py-1">AI 피드백으로 분석 감각을 키워보세요.</p>
                         <p className="text-center text-lg font-semibold leading-relaxed py-1">실제 데이터를 활용한 모의 투자로 안전한 학습을 경험할 수 있습니다.</p>
