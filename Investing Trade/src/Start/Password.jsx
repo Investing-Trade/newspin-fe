@@ -3,11 +3,14 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import paperplane from '../assets/paper-plane.png';
 import { useForm } from 'react-hook-form';
-import { useEffect, useState } from 'react'; // useState 추가
+import { useEffect, useState } from 'react';
+import emailjs from '@emailjs/browser';
 
 const Password = () => {
   // 1. 인증 메일 전송 여부를 확인하는 상태
   const [isCodeSent, setIsCodeSent] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState(""); // 생성된 코드 저장용 상태
+  const [isSubmitting, setIsSubmitting] = useState(false); // [수정] loading 대신 에러가 발생했던 이 변수명을 사용합니다.
 
   // 페이지 접속 시 타이틀 변경
   useEffect(() => {
@@ -32,21 +35,58 @@ const Password = () => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.com$/;
 
   // 3. 통합 제출 핸들러 (단계별 분기)
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
     if (!isCodeSent) {
-      // [1단계] 이메일 인증 코드 전송
-      console.log("인증 코드 전송 요청:", data.userId, data.email);
-      alert("입력하신 이메일로 인증 코드가 전송되었습니다.");
-      setIsCodeSent(true);
+      // [1단계] 인증 코드 생성 및 이메일 발송
+      setIsSubmitting(true);
+      
+      // 6자리 무작위 코드 생성 (100000 ~ 999999)
+      const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedCode(randomCode);
+
+      // EmailJS에 보낼 파라미터 (템플릿 변수명과 일치해야 함)
+      const templateParams = {
+        to_email: data.email,
+        to_name: data.userId,
+        auth_code: randomCode,
+      };
+
+      try {
+        // 실제 발송 시 아래 주석을 해제하고 ID들을 입력하세요.
+        /*
+        await emailjs.send(
+          'YOUR_SERVICE_ID', 
+          'YOUR_TEMPLATE_ID', 
+          templateParams, 
+          'YOUR_PUBLIC_KEY'
+        );
+        */
+        
+        console.log("발송된 인증코드(테스트용):", randomCode);
+        alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
+        setIsCodeSent(true);
+      } catch (error) {
+        alert("이메일 전송에 실패했습니다. 다시 시도해 주세요.");
+        console.error("EmailJS Error:", error);
+      } finally {
+        setIsSubmitting(false);
+      }
+
     } else {
-      // [2단계] 비밀번호 재설정 (DB 전송)
-      console.log("DB 비밀번호 업데이트 요청:", {
+      // [2단계] 코드 검증 및 비밀번호 변경
+      if (data.authCode !== generatedCode) {
+        alert("인증 코드가 일치하지 않습니다. 다시 확인해 주세요.");
+        return;
+      }
+
+      // 비밀번호 변경 성공 시뮬레이션 (DB 연동 지점)
+      console.log("비밀번호 변경 완료:", {
         userId: data.userId,
-        authCode: data.authCode,
         newPassword: data.newPassword
       });
-      alert("비밀번호가 성공적으로 변경되었습니다! 다시 로그인해주세요.");
-      // window.location.href = "/login"; // 실제 로그인 페이지 이동 시 주석 해제
+      
+      alert("비밀번호가 성공적으로 변경되었습니다! 로그인 화면으로 이동합니다.");
+      window.location.href = "/login";
     }
   };
 
@@ -79,7 +119,7 @@ const Password = () => {
         </div>
 
         {/* [오른쪽 섹션] */}
-        <div className="flex-1 p-4 flex flex-col justify-center bg-white shrink-0 ">
+        <div className="flex-1 p-12 flex flex-col justify-center bg-white shrink-0 ">
           <h2 className="text-5xl font-jua text-center mb-8 text-gray-800">
             {isCodeSent ? "비밀번호 재설정" : "비밀번호 찾기"}
           </h2>
@@ -114,13 +154,16 @@ const Password = () => {
               {errors.email && <p className="text-red-500 text-xs font-bold">{errors.email.message}</p>}
             </div>
 
-            <hr className='text-gray-500 my-8' />
-
+            {!isCodeSent && <hr className='text-gray-500 my-8' />}
 
             {/* 인증 코드 전송 버튼 */}
             {!isCodeSent && (
-              <button type="submit" className="w-full bg-blue-600 border border-white text-lg cursor-pointer text-white font-jua py-3 rounded-lg mt-4 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all">
-                📩 이메일로 인증 코드 전송
+              <button 
+                type="submit" 
+                disabled={isSubmitting}
+                className={`w-full bg-blue-600 border border-white text-lg cursor-pointer text-white font-jua py-3 rounded-lg mt-4 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all ${isSubmitting ? 'opacity-50' : ''}`}
+              >
+                {isSubmitting ? "발송 중..." : "📩 이메일로 인증 코드 전송"}
               </button>
             )}
 
@@ -165,19 +208,16 @@ const Password = () => {
                   />
                   {errors.newPasswordConfirm && <p className="text-red-500 text-xs font-bold">{errors.newPasswordConfirm.message}</p>}
                 </div>
-                <form action="">
-                  <button
-                    type="submit"
-                    className="w-full flex flex-row items-center justify-center gap-2 cursor-pointer bg-blue-600 text-white font-jua py-3 rounded-lg shadow-md hover:bg-blue-500 active:scale-[0.98] transition-all"
-                  >
-                    {/* 1. 이미지 크기를 w-6 정도로 줄여야 텍스트와 높이가 잘 맞습니다 */}
-                    <img src={paperplane} alt="plane" className="w-6 h-auto" />
 
-                    {/* 2. 텍스트와 이미지가 이제 같은 flex 컨테이너 안에서 가로로 배치됩니다 */}
-                    <span className="leading-none">비밀번호 변경 및 로그인 화면으로 이동</span>
-                  </button>
-                </form>
-
+                {/* [수정] 중첩된 form 태그를 삭제하고 버튼만 남겼습니다 */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full flex flex-row items-center justify-center gap-2 cursor-pointer bg-blue-600 text-white font-jua py-3 rounded-lg shadow-md hover:bg-blue-500 active:scale-[0.98] transition-all"
+                >
+                  <img src={paperplane} alt="plane" className="w-6 h-auto" />
+                  <span className="leading-none">{isSubmitting ? "변경 중..." : "비밀번호 변경 및 로그인 화면으로 이동"}</span>
+                </button>
               </div>
             )}
           </form>
