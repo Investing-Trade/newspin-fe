@@ -2,7 +2,7 @@ import businessMan from '../assets/bussiness-man.png';
 import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import headline from '../assets/headline.png';
 import video from '../assets/video-lesson.png';
 import invest from '../assets/invest.png';
@@ -12,7 +12,7 @@ import portfolio from '../assets/pie-chart.png';
 
 const Invest = () => {
     const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
-
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false); // 모달 상태 관리를 위한 state
     useEffect(() => {
         document.title = "NewsPin - Invest";
     }, []);
@@ -34,8 +34,13 @@ const Invest = () => {
                 </div>
 
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
-                    <button className="hover:underline font-jua cursor-pointer">내 정보</button>
-                    <span className='font-bold mb-2'>|</span>
+                    {/* 2. 내 정보 클릭 시 모달 열기 */}
+                    <button
+                        onClick={() => setIsProfileModalOpen(true)}
+                        className="hover:underline font-jua cursor-pointer"
+                    >
+                        내 정보
+                    </button>                    <span className='font-bold mb-2'>|</span>
                     <button onClick={() => {/* 로그아웃 로직 - 추후 구현 백엔드 연동 및 구현 필요*/ }} className="hover:underline font-jua cursor-pointer">로그아웃</button>
                 </div>
             </div>
@@ -85,8 +90,60 @@ const Invest = () => {
                         <p className='font-jua'>AI가 투자 성향을 분석하고 맞춤형 피드백 제공</p>
                     </div>
                 </div>
-
             </div>
+
+            {/* 3. 내 정보 모달 UI 구현 */}
+            {isProfileModalOpen && (
+                <div className="fixed inset-0 bg-white/60 flex justify-center items-center z-50">
+                    <div className="bg-white rounded-3xl p-10 w-[500px] shadow-2xl flex flex-col font-jua">
+                        <h2 className="text-5xl text-center mb-8">내 정보</h2>
+
+                        <div className="space-y-6 mb-8 text-2xl">
+                            <div>
+                                <label className="block mb-2">아이디</label>
+                                <input
+                                    type="text"
+                                    value="investingTrade"
+                                    readOnly
+                                    className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
+                                />
+                            </div>
+                            <div>
+                                <label className="block mb-2">비밀번호</label>
+                                <input
+                                    type="password"
+                                    value="newspaper123"
+                                    readOnly
+                                    className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
+                                />
+                            </div>
+                            <div>
+                                <label className="block mb-2">이메일</label>
+                                <input
+                                    type="email"
+                                    value="newsanalyst35144@gmail.com"
+                                    readOnly
+                                    className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
+                                />
+                            </div>
+                        </div>
+
+                        <hr className="border-gray-300 mb-8" />
+
+                        <div className="flex gap-4">
+                            <button className="flex-1 bg-indigo-600 text-white text-2xl cursor-pointer py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700">
+                                📝 수정하기
+                            </button>
+                            <button
+                                onClick={() => setIsProfileModalOpen(false)}
+                                className="flex-1 bg-indigo-600 cursor-pointer text-white text-2xl py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700"
+                            >
+                                ➔ 나가기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
