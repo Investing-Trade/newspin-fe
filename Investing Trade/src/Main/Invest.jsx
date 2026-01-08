@@ -3,10 +3,9 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 const Invest = () => {
-  const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
+    const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
 
     useEffect(() => {
         document.title = "NewsPin - Invest";
@@ -31,7 +30,7 @@ const Invest = () => {
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button onClick={() => navigate('/profile')} className="hover:underline font-jua cursor-pointer">내 정보</button>
                     <span className='font-bold mb-2'>|</span>
-                    <button onClick={() => {/* 로그아웃 로직 */ }} className="hover:underline font-jua cursor-pointer" onClick={() => navigate('/login')}>로그아웃</button>
+                    <button onClick={() => {/* 로그아웃 로직 */ }} className="hover:underline font-jua cursor-pointer">로그아웃</button>
                 </div>
             </div>
 
