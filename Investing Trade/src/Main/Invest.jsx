@@ -142,7 +142,7 @@ const Invest = () => {
                                 className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700"
                             >
                                 <img src={logout} alt="logout" className='w-12' />
-                                <span>로그아웃</span>
+                                <span>메인 페이지로</span>
                             </button>
                         </div>
                     </div>
