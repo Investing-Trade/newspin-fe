@@ -62,7 +62,7 @@
 | **대안 흐름** | **A1: 정보 불일치** | 3. 입력된 아이디와 이메일이 시스템의 정보와 일치하지 않으면, 오류 메시지를 표시한다 (예: "입력하신 정보와 일치하는 계정이 없습니다."). |
 | **보조 기능** | 좌측 상단의 **뒤로가기 화살표** 버튼 ← 을 클릭한다. | 시스템은 현재 화면에서 **작성한 내용을 취소**하고 **로그인 화면**으로 이동시킨다. |
 
-<img width="1940" height="1534" alt="image" src="https://github.com/user-attachments/assets/b77daaf1-9a87-4276-96f0-623c4b0d0dcc" />
+<img width="1908" height="1390" alt="image" src="https://github.com/user-attachments/assets/acc350aa-4a75-453c-ad2e-121f11698d41" />
 유스케이스: 회원가입 (UC-002)
 
 | **항목** | **내용** |
