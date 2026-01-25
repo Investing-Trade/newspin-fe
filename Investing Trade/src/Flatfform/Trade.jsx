@@ -9,6 +9,19 @@ import submit from '../assets/submit.png';
 import logout from '../assets/logout-1.png';
 import refresh from '../assets/re.png';
 import correction from '../assets/correction-tape.png';
+import trade from '../assets/trade.png';
+import trading from '../assets/trading.png';
+import selling from '../assets/selling.png';
+import write from '../assets/write-review.png';
+import it from '../assets/it.png';
+import popcorn from '../assets/popcorn.png';
+import cutlery from '../assets/cutlery.png';
+import buy from '../assets/buy-button.png';
+import bio from '../assets/bio-gas.png';
+import earning from '../assets/earning.png';
+import input from '../assets/input.png';
+import start from '../assets/start.png';
+import review from '../assets/write-review.png';
 
 const Trade = () => {
     const navigate = useNavigate();
@@ -51,17 +64,19 @@ const Trade = () => {
                 <div className="flex flex-[0.3] gap-6 overflow-hidden">
                     {/* 1. 투자 환경 설정 */}
                     <div className="border-2 border-gray-300 rounded-lg flex-1 p-2 relative bg-white">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xl">📊</span>
+                        <div className="flex items-center gap-3 mb-3">
+                            <img src={input} alt="input" className='w-8 h-8' />
                             <h3 className="text-lg font-semibold ">투자 환경 설정</h3>
-                            <button className="hover:bg-blue-700 active:scale-[0.98] transition-all bg-blue-600 cursor-pointer shadow-lg font-semibold text-white text-sm px-2 py-1 rounded-md items-center gap-2">
-                                📈 투자 시작
+                            <button className="flex hover:bg-blue-600 active:scale-[0.90] transition-all bg-blue-400 border-1 border-black cursor-pointer shadow-lg font-semibold text-white text-sm px-2 py-1 rounded-md items-center gap-2">
+                                <img src={start} alt="start" className='w-5 h-5' /> 
+                                <span>투자 시작</span>
                             </button>
                             <div className="ml-auto flex items-center gap-1 text-sm font-bold">
-                                💵 금액 - 최대 1000만원까지
+                                <img src={earning} alt="earn" className='w-8 h-8' />
+                                <span>금액 - 최대 1000만원까지</span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3 font-jua text-sm">
+                        <div className="flex items-center gap-5 font-jua text-sm">
                             <span className="font-bold">시작날짜</span>
                             <input type="text" value="2021-03-01" readOnly className="border border-gray-400 rounded px-2 w-28 text-center" />
                             <span className="font-bold">종료날짜</span>
@@ -96,7 +111,7 @@ const Trade = () => {
                     <div className="flex-[1.2] border-2 border-gray-300 rounded-lg p-3 flex flex-col bg-white overflow-hidden">
                         <div className="flex justify-between items-center mb-2">
                             <div className="flex items-center gap-2">
-                                <span className="text-xl">📊</span>
+                                <img src={trading} alt="dashboard" className='w-10 h-10' />
                                 <h3 className="font-bold text-lg">차트 정보 및 거래</h3>
                             </div>
                             <div className="border border-gray-400 rounded-sm px-3 py-1 text-sm font-bold bg-gray-50">
@@ -124,32 +139,58 @@ const Trade = () => {
                         <div className="grid grid-cols-2 gap-4 border-t pt-2">
                             <div>
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className="font-bold text-xs">💰 매수 / 매도</span>
+                                    <img src={trade} alt="trade" className='w-8 h-8'/>
+                                    <span className="font-bold text-xs">매수 / 매도</span>
                                     <span className="text-sm ml-auto font-semibold">잔액
                                     <span className="border rounded-sm border-gray-400 px-2 py-0.5 ml-1">3,950,000 원</span></span>
                                 </div>
-                                <div className="text-[10px] font-bold mb-1">종목 선택</div>
-                                <div className="flex gap-1 text-[9px] mb-1">
-                                    <button className=" bg-gray-100 border border-gray-300 rounded px-1 flex-1">바이오</button>
-                                    <button className=" bg-gray-100 border border-gray-300 rounded px-1 flex-1">IT/테크</button>
-                                    <button className=" bg-gray-100 border border-gray-300 rounded px-1 flex-1">엔터</button>
-                                    <button className=" bg-gray-100 border border-gray-300 rounded px-1 flex-1">외식</button>
+                                <div className="text-[12px] font-bold mb-3 mt-5">종목 선택</div>
+                                <div className="flex gap-3 text-[8px] mb-2">
+                                    <img src={bio} alt="bio" className='w-7 h-7'/>
+                                    <span className='font-bold text-[10px] mt-1'>바이오</span>
+                                    <img src={it} alt="it" className='w-7 h-7'/>
+                                    <span className='font-bold text-[10px] mt-1'>IT/테크</span>
+                                    <img src={popcorn} alt="popcorn" className='w-7 h-7'/>
+                                    <span className='font-bold text-[10px] mt-1'>엔터</span>
+                                    <img src={cutlery} alt="cutlery" className='w-7 h-7'/>
+                                    <span className='font-bold text-[10px] mt-1'>외식</span>
                                 </div>
                                 <div className="grid grid-cols-4 gap-1">
-                                    <select className="border text-[9px] rounded"><option>셀트리온</option></select>
-                                    <select className="border text-[9px] rounded"><option>삼성전자</option></select>
-                                    <select className="border text-[9px] rounded"><option>CGV</option></select>
-                                    <select className="border text-[9px] rounded"><option>신세계푸드</option></select>
+                                    <select className="border text-[9px] font-bold rounded">
+                                        <option>셀트리온</option>
+                                        <option>한미약품</option>
+                                        <option>유한양행</option>
+                                        <option>삼성바이오로직스</option>
+                                        </select>
+                                    <select className="border text-[9px] font-bold rounded">
+                                        <option>삼성전자</option>
+                                        <option>네이버</option>
+                                        <option>LG CNS</option>
+                                        <option>삼성 SDS</option>
+                                        </select>
+                                    <select className="border text-[9px] font-bold rounded">
+                                        <option>CGV</option>
+                                        <option>SM</option>
+                                        </select>
+                                    <select className="border text-[9px] font-bold rounded">
+                                        <option>신세계푸드</option>
+                                        </select>
                                 </div>
                             </div>
-                            <div className="flex flex-col gap-1 items-end text-xs font-jua">
+                            <div className="flex flex-col ml-20 gap-1 items-end text-xs font-jua">
                                 <div className="flex w-full justify-between items-center"><span className="font-bold">종목</span> <span className="border border-gray-400 px-4 rounded bg-white">셀트리온</span></div>
                                 <div className="flex w-full justify-between items-center"><span className="font-bold">거래 대금</span> <span className="border border-gray-400 px-4 rounded bg-white font-mono">58,000 원</span></div>
                                 <div className="flex w-full justify-between items-center"><span className="font-bold">거래량</span> <div className="flex items-center gap-1"><span className="border border-gray-400 px-4 rounded bg-white">10</span><span>주</span></div></div>
                                 <div className="flex w-full justify-between items-center"><span className="font-bold">총 가격</span> <span className="border border-gray-400 px-4 rounded bg-white font-mono">580,000 원</span></div>
-                                <div className="flex gap-2 w-full mt-1">
-                                    <button className="ml-9 w-[38%] cursor-pointer hover:bg-blue-700 active:scale-[0.90] transition-all  bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800">매수</button>
-                                    <button className="w-[38%] cursor-pointer hover:bg-red-700 active:scale-[0.90] transition-all  bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700">매도</button>
+                                <div className="flex gap-2 w-full mt-2">
+                                    <button className="ml-9 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-blue-700 active:scale-[0.90] transition-all  bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800">
+                                        <img src={buy} alt="buy" className='w-8 h-8' />
+                                        <span className='mt-2 text-[16px] ml-1'>매수</span>
+                                        </button>
+                                    <button className="w-[38%] px-1  cursor-pointer gap-2 flex hover:bg-red-700 active:scale-[0.90] transition-all  bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700">
+                                        <img src={selling} alt="sell" className='w-8 h-8' />
+                                        <span className='mt-2 text-[16px] ml-1'>매도</span>
+                                        </button>
                                 </div>
                             </div>
                         </div>
@@ -158,7 +199,7 @@ const Trade = () => {
                     {/* 4. 투자 결과 및 피드백 */}
                     <div className="flex-1 border-2 border-gray-400 rounded-lg p-2 bg-white flex flex-col overflow-hidden">
                         <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xl">📋</span>
+                            <img src={review} alt="review" className='w-10 h-10' />
                             <h3 className="font-bold text-lg">투자 결과 및 피드백</h3>
                         </div>
                         <div className="border border-gray-400 rounded-lg p-3 flex-1 overflow-y-auto text-[11px] leading-snug font-jua space-y-2">
@@ -174,10 +215,10 @@ const Trade = () => {
                 {/* 최하단 네비게이션 버튼 바 */}
                 <div className="flex justify-between items-center px-4 pt-2 border-t mt-auto shrink-0 font-jua">
                     <div className="flex gap-3">
-                        <button className="cursor-pointer bg-indigo-500 text-white hover:bg-blue-700 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-indigo-700">
+                        <button className="cursor-pointer bg-sky-500 text-white hover:bg-amber-200 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
                             <span className="text-lg">📅</span> 다음 날짜
                         </button>
-                        <button onClick={() => navigate('/')} className="cursor-pointer hover:bg-blue-700 active:scale-[0.90] transition-all bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-indigo-800">
+                        <button onClick={() => navigate('/invest')} className="cursor-pointer hover:bg-blue-700 active:scale-[0.90] transition-all bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-violet-500">
                             <span className="text-lg">🏠</span> 메인 화면 이동
                         </button>
                     </div>
