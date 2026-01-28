@@ -80,7 +80,7 @@ const Invest = () => {
                 </div>
 
                 {/* 3. 내 포트폴리오 카드 */}
-                <div className="bg-white rounded-[2rem] border-4  hover:bg-blue-400 active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white p-10 flex flex-col items-center shadow-xl min-h-[550px] cursor-pointer">
+                <div onClick={() => navigate('/portfolio')} className="bg-white rounded-[2rem] border-4  hover:bg-blue-400 active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white p-10 flex flex-col items-center shadow-xl min-h-[550px] cursor-pointer">
                     <h2 className="text-4xl mb-8 text-black font-jua">내 포트폴리오</h2>
                     <div className="h-40 flex items-center mb-8 space-x-6">
                         <img src={portfolio} alt="portfolio" className='w-32' />

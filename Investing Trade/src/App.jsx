@@ -3,14 +3,16 @@ import Login from './Start/Login.jsx'
 import Password from './Start/Password.jsx'
 import SignUp from './Start/SignUp.jsx'
 import Invest from './Main/Invest.jsx';
-import News from './Flatfform/News.jsx';
-import Trade from './Flatfform/Trade.jsx';
+import News from './Platform/News.jsx';
+import Trade from './Platform/Trade.jsx';
+import Portfolio from './Platform/Portfolio.jsx';
 
 function App() {
   return (
     <div >
       <Routes>        
-        <Route path="/" element={<Trade />} />
+        <Route path="/" element={<Invest />} />
+        <Route path="/portfolio" element={<Portfolio />} />
         <Route path="/trade" element={<Trade />} />
         <Route path="/news" element={<News />} />
         <Route path="/invest" element={<Invest />} />

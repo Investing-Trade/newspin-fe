@@ -227,7 +227,7 @@ const Trade = () => {
                         <button className="bg-slate-700 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-gray-400 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md">
                             <span className="text-lg">📊</span> 투자 결과 및 피드백
                         </button>
-                        <button className="bg-blue-600 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-blue-600 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md hover:bg-blue-800">
+                        <button onClick={() => navigate('/portfolio')} className="bg-blue-600 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-blue-600 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md hover:bg-blue-800">
                             <span className="text-lg">📍</span> 내 포트폴리오로 이동
                         </button>
                     </div>
