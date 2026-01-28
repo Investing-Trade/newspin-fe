@@ -14,7 +14,7 @@ import trading from '../assets/trading.png';
 import selling from '../assets/selling.png';
 import write from '../assets/write-review.png';
 import it from '../assets/it.png';
-import popcorn from '../assets/popcorn.png';
+import enter from '../assets/popcorn.png';
 import cutlery from '../assets/cutlery.png';
 import buy from '../assets/buy-button.png';
 import bio from '../assets/bio-gas.png';
@@ -22,7 +22,8 @@ import earning from '../assets/earning.png';
 import input from '../assets/input.png';
 import start from '../assets/start.png';
 import review from '../assets/write-review.png';
-
+import distribution from '../assets/distribution.png';
+import globe from '../assets/globe.png';
 const Trade = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -91,7 +92,7 @@ const Trade = () => {
                         </div>
 
                         {/* 3. 차트 정보 및 거래 -> 추후 api 연동 */}
-                        <div className="flex-1 border-2 border-gray-300 rounded-lg p-3 flex flex-col bg-white overflow-hidden">
+                        <div className="flex-1 border-2 border-gray-300 rounded-lg p-1 flex flex-col bg-white overflow-hidden">
                             <div className="flex justify-between items-center mb-2">
                                 <div className="flex items-center gap-2">
                                     <img src={trading} alt="dashboard" className='w-10 h-10' />
@@ -102,57 +103,87 @@ const Trade = () => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-1 gap-4 overflow-hidden mb-3">
+                            <div className="flex flex-1 gap-2 overflow-hidden mb-1">
                                 <div className="flex-1 border-2 border-slate-700 rounded-lg flex items-end justify-around p-4 bg-gray-50 relative">
                                     <div className="w-6 bg-green-500 h-[60%] relative"><div className="absolute -top-4 left-1/2 w-px h-[120%] bg-green-500 -translate-x-1/2 -z-0"></div></div>
                                     <div className="w-6 bg-red-500 h-[40%] relative"><div className="absolute -top-2 left-1/2 w-px h-[140%] bg-red-500 -translate-x-1/2 -z-0"></div></div>
                                     <div className="w-6 bg-green-500 h-[75%] relative"><div className="absolute -top-6 left-1/2 w-px h-[110%] bg-green-500 -translate-x-1/2 -z-0"></div></div>
                                     <div className="w-6 bg-red-500 h-[50%] relative"><div className="absolute -top-3 left-1/2 w-px h-[130%] bg-red-500 -translate-x-1/2 -z-0"></div></div>
                                 </div>
-                                <div className="w-44 border border-gray-400 rounded p-2 text-[10px] font-jua leading-tight bg-gray-50">
-                                    <p className="font-bold border-b mb-1">← [차트 정보 및 거래 - 정보 개요도]</p>
+                                <div className="w-44 border border-gray-400 rounded p-1 text-[10px] font-jua leading-tight bg-gray-50">
+                                    <p className="font-bold border-b ">← [차트 정보 및 거래 - 정보 개요도]</p>
                                     <ul className="list-disc list-inside space-y-0.5">
-                                        <li>종목명</li><li>주문 가격</li><li>거래 대금</li><li>거래량</li><li>거래 수량</li><li>총 거래 금액</li><li>현재가 및 등락률</li><li>거래 일자 (현재 날짜)</li><li>평가 손익</li>
+                                        <li>종목명</li>
+                                        <li>주문 가격</li>
+                                        <li>거래 대금</li>
+                                        <li>거래량</li>
+                                        <li>거래 수량</li>
+                                        <li>총 거래 금액</li>
+                                        <li>현재가 및 등락률</li>
+                                        <li>거래 일자 (현재 날짜)</li>
+                                        <li>평가 손익</li>
                                     </ul>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 border-t pt-2 shrink-0">
+                            <div className="grid grid-cols-2 gap-1 border-t pt-1 shrink-0">
                                 <div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <img src={trade} alt="trade" className='w-8 h-8' />
+                                    <div className="flex items-center gap-2 text-[13px] font-bold">
+                                        <img src={trade} alt="trade" className='w-7 h-7' />
                                         <span className="font-bold text-xs">매수 / 매도</span>
                                         <span className="text-sm ml-auto font-semibold">잔액
                                             <span className="border rounded-sm border-gray-400 px-2 py-0.5 ml-1">3,950,000 원</span></span>
                                     </div>
-                                    <div className="text-[12px] font-bold mb-3 mt-5">종목 선택</div>
-                                    <div className="flex gap-3 text-[8px] mb-2">
-                                        <img src={bio} alt="bio" className='w-7 h-7' /><span className='font-bold text-[10px] mt-1'>바이오</span>
-                                        <img src={it} alt="it" className='w-7 h-7' /><span className='font-bold text-[10px] mt-1'>IT/테크</span>
-                                        <img src={popcorn} alt="popcorn" className='w-7 h-7' /><span className='font-bold text-[10px] mt-1'>엔터</span>
-                                        <img src={cutlery} alt="cutlery" className='w-7 h-7' /><span className='font-bold text-[10px] mt-1'>외식</span>
+                                    <div className="text-[13px] font-bold mb-3 mt-1">종목 선택</div>
+                                    <div className="flex space-x-3 text-[12px] mb-2">
+                                        <img src={bio} alt="bio" className='w-5 h-5' />
+                                        <span className='font-bold text-[12px] mt-1'>바이오</span>
+                                        <img src={it} alt="it" className='w-5 h-5' />
+                                        <span className='font-bold text-[12px] mt-1'>IT/테크</span>
+                                        <img src={distribution} alt="distribution" className='w-5 h-5' />
+                                        <span className='font-bold text-[12px] mt-1'>유통</span>
+                                        <img src={globe} alt="globe" className='w-5 h-5 ml-2' />
+                                        <span className='font-bold text-[12px] mt-1'>여행</span>
                                     </div>
-                                    <div className="grid grid-cols-4 gap-1">
-                                        <select className="border text-[9px] font-bold rounded">
+                                    <div className="flex flex-row items-center space-x-3">
+                                        <select className="border text-[9px] font-bold rounded w-18">
                                             <option>셀트리온</option>
                                             <option>한미약품</option>
                                             <option>유한양행</option>
                                             <option>삼성바이오로직스</option>
                                         </select>
-                                        <select className="border text-[9px] font-bold rounded">
-                                            <option>삼성전자</option>
-                                            <option>네이버</option>
-                                            <option>LG CNS</option>
-                                            <option>삼성 SDS</option>
+                                        <select className="border text-[9px] font-bold rounded w-18">
+                                            <option>셀트리온</option>
+                                            <option>한미약품</option>
+                                            <option>유한양행</option>
+                                            <option>삼성바이오로직스</option>
                                         </select>
-                                        <select className="border text-[9px] font-bold rounded">
-                                            <option>CGV</option>
-                                            <option>SM</option>
+                                        <select className="border text-[9px] font-bold rounded w-18">
+                                            <option>셀트리온</option>
+                                            <option>한미약품</option>
+                                            <option>유한양행</option>
+                                            <option>삼성바이오로직스</option>
                                         </select>
-                                        <select className="border text-[9px] font-bold rounded">
-                                            <option>신세계푸드</option>
+                                        <select className="border text-[9px] font-bold rounded w-18">
+                                            <option>셀트리온</option>
+                                            <option>한미약품</option>
+                                            <option>유한양행</option>
+                                            <option>삼성바이오로직스</option>
                                         </select>
                                     </div>
+                                    <div className="flex space-x-2 text-[8px] mt-2">   
+                                        <img src={cutlery} alt="cutlery" className='w-5 h-5' />
+                                        <span className='font-bold text-[12px] mt-1'>외식 / 프랜차이즈</span>
+                                        <img src={enter} alt="enter" className='w-5 h-5' />
+                                        <span className='font-bold text-[12px] mt-1'>문화 / 엔터테인먼트</span>
+                                    </div>
+                                    <select className="border ml-1 text-[9px] font-bold rounded w-20">
+                                        <option>CGV</option>
+                                        <option>SM</option>
+                                    </select>
+                                    <select className="border ml-15 text-[9px] font-bold rounded w-20">
+                                        <option>신세계푸드</option>
+                                    </select>
                                 </div>
                                 <div className="flex flex-col ml-20 gap-1 items-end text-xs font-jua">
                                     <div className="flex w-full justify-between items-center"><span className="font-bold">종목</span> <span className="border border-gray-400 px-4 rounded bg-white">셀트리온</span></div>
@@ -160,8 +191,13 @@ const Trade = () => {
                                     <div className="flex w-full justify-between items-center"><span className="font-bold">거래량</span> <div className="flex items-center gap-1"><span className="border border-gray-400 px-4 rounded bg-white">10</span><span>주</span></div></div>
                                     <div className="flex w-full justify-between items-center"><span className="font-bold">총 가격</span> <span className="border border-gray-400 px-4 rounded bg-white font-mono">580,000 원</span></div>
                                     <div className="flex gap-2 w-full mt-2">
-                                        <button className="ml-9 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-blue-700 active:scale-[0.90] transition-all bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800"><img src={buy} alt="buy" className='w-8 h-8' /><span className='mt-2 text-[16px] ml-1'>매수</span></button>
-                                        <button className="w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-red-700 active:scale-[0.90] transition-all bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700"><img src={selling} alt="sell" className='w-8 h-8' /><span className='mt-2 text-[16px] ml-1'>매도</span></button>
+                                        <button className="mt-8 ml-9 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-blue-700 active:scale-[0.90] transition-all bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800"><img src={buy} alt="buy" className='w-8 h-8' />
+                                        <span className='mt-2 text-[16px] ml-1'>매수</span>
+                                        </button>
+                                        <button className="mt-8 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-red-700 active:scale-[0.90] transition-all bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700">
+                                            <img src={selling} alt="sell" className='w-8 h-8' />
+                                            <span className='mt-2 text-[16px] ml-1'>매도</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -169,7 +205,7 @@ const Trade = () => {
                     </div>
 
                     {/* === [우측 영역] 뉴스 기사(상) + 피드백(하) === */}
-                    <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                    <div className="flex-1 flex flex-col 2 overflow-hidden">
 
                         {/* 2. 뉴스 기사 -> 추후 api 연동 */}
                         <div className="flex-1 border-2 border-gray-400 rounded-lg p-1 flex flex-col bg-white overflow-hidden">
