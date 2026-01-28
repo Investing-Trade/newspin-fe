@@ -103,7 +103,7 @@ const Login = () => {
           <form className="space-y-7" onSubmit={handleSubmit(onSubmit)}>
             {/* 상단: 로그인 ID용 이메일 */}
                         <div className="space-y-3">
-                            <p className='font-bold text-lg'>이메일</p>
+                            <p className='font-jua text-lg'>이메일</p>
                             <input
                                 type="text"
                                 placeholder="newspin@naver.com"
