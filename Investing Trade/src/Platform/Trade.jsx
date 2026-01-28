@@ -28,6 +28,20 @@ const Trade = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
+    {/* 날짜 옵션 생성을 위한 헬퍼 함수 */ }
+    const generateDateOptions = (start, end) => {
+        const dates = [];
+        let current = new Date(start);
+        const stopDate = new Date(end);
+
+        while (current <= stopDate) {
+            dates.push(current.toISOString().split('T')[0]);
+            current.setDate(current.getDate() + 3); // 3일 단위 증가
+        }
+        return dates;
+    };
+
+    const dateOptions = generateDateOptions('2020-01-01', '2020-03-31');
     useEffect(() => {
         document.title = "NewsPin - Trading Dashboard";
     }, []);
@@ -83,11 +97,26 @@ const Trade = () => {
                             </div>
                             <div className="flex items-center gap-5 font-jua text-sm">
                                 <span className="font-bold">시작날짜</span>
-                                <input type="text" value="2021-03-01" readOnly className="border border-gray-400 rounded px-2 w-28 text-center" />
+                                <select className="border border-gray-400 rounded px-2 w-32 text-center bg-white">
+                                    {dateOptions.map(date => (
+                                        <option key={`start-${date}`} value={date}>{date}</option>
+                                    ))}
+                                </select>
+
                                 <span className="font-bold">종료날짜</span>
-                                <input type="text" value="2021-05-31" readOnly className="border border-gray-400 rounded px-2 w-28 text-center" />
+                                <select className="border border-gray-400 rounded px-2 w-32 text-center bg-white">
+                                    {dateOptions.map(date => (
+                                        <option key={`end-${date}`} value={date}>{date}</option>
+                                    ))}
+                                </select>
+
                                 <span className="font-bold">금액</span>
-                                <input type="text" value="5,000,000" readOnly className="border border-gray-400 rounded px-2 w-24 text-right" />
+                                {/* p 태그 대신 사용자가 직접 입력 가능한 number 타입 input으로 변경 */}
+                                <input
+                                    type="number"
+                                    placeholder="금액 입력"
+                                    className="border border-gray-400 rounded text-right"
+                                />
                             </div>
                         </div>
 
@@ -171,7 +200,7 @@ const Trade = () => {
                                             <option>삼성바이오로직스</option>
                                         </select>
                                     </div>
-                                    <div className="flex space-x-2 text-[8px] mt-2">   
+                                    <div className="flex space-x-2 text-[8px] mt-2">
                                         <img src={cutlery} alt="cutlery" className='w-5 h-5' />
                                         <span className='font-bold text-[12px] mt-1'>외식 / 프랜차이즈</span>
                                         <img src={enter} alt="enter" className='w-5 h-5' />
@@ -192,7 +221,7 @@ const Trade = () => {
                                     <div className="flex w-full justify-between items-center"><span className="font-bold">총 가격</span> <span className="border border-gray-400 px-4 rounded bg-white font-mono">580,000 원</span></div>
                                     <div className="flex gap-2 w-full mt-2">
                                         <button className="mt-8 ml-9 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-blue-700 active:scale-[0.90] transition-all bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800"><img src={buy} alt="buy" className='w-8 h-8' />
-                                        <span className='mt-2 text-[16px] ml-1'>매수</span>
+                                            <span className='mt-2 text-[16px] ml-1'>매수</span>
                                         </button>
                                         <button className="mt-8 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-red-700 active:scale-[0.90] transition-all bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700">
                                             <img src={selling} alt="sell" className='w-8 h-8' />
