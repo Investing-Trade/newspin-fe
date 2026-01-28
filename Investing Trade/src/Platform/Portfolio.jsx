@@ -63,7 +63,7 @@ const Portfolio = () => {
                 <div className="flex flex-1 gap-5 overflow-hidden">
 
                     {/* 1. 보유 종목 섹션 (좌측) */}
-                    <div className="flex-[0.45] flex flex-col overflow-hidden bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex-[0.45] flex flex-col overflow-hidden bg-white rounded-xl border-2 border-gray-600 shadow-sm">
                         <div className="p-3 border-b border-gray-600 bg-blue-600">
                             <h2 className="text-2xl flex items-center gap-2">
                                 <img src={dashboard} alt="dashboard" className='w-10 h-10' />
@@ -185,7 +185,7 @@ const Portfolio = () => {
 
                             {/* 액션 버튼 그룹 */}
                             <div className="w-50 flex flex-col gap-8 mt-10">
-                                
+
                                 <button className="flex p-2 bg-red-600 cursor-pointer space-x-2 hover:bg-rose-700 text-white rounded-lg items-center border-2 border-gray-400 justify-center transition-all active:scale-95 shadow-lg">
                                     <img src={reset} alt="reset" className='w-10 h-10' />
                                     <span className="text-xl font-jua">내역 초기화</span>
@@ -199,38 +199,38 @@ const Portfolio = () => {
                                     <span className="text-xl font-jua">메인으로 이동</span>
                                 </button>
                             </div>
-                        </div> 
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* 내 정보 모달 */}
+            {/* 내 정보 모달 UI 유지 */}
             {isProfileModalOpen && (
                 <div className="fixed inset-0 bg-white/60 flex justify-center items-center z-50">
                     <div className="bg-white rounded-3xl p-10 w-[500px] shadow-2xl flex flex-col font-jua">
-                        <h2 className="text-5xl text-center mb-8 text-blue-700 font-bold">내 정보</h2>
+                        <h2 className="text-5xl text-center mb-8">내 정보</h2>
                         <div className="space-y-6 mb-8 text-2xl">
                             <div>
-                                <label className="block mb-2 text-gray-700">아이디</label>
+                                <label className="block mb-2">아이디</label>
                                 <input type="text" value="investingTrade" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
                             </div>
                             <div>
-                                <label className="block mb-2 text-gray-700">비밀번호</label>
+                                <label className="block mb-2">비밀번호</label>
                                 <input type="password" value="password123" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
                             </div>
                             <div>
-                                <label className="block mb-2 text-gray-700">이메일</label>
+                                <label className="block mb-2">이메일</label>
                                 <input type="email" value="newsanalyst35144@gmail.com" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
                             </div>
                         </div>
                         <hr className="border-gray-300 mb-8" />
-                        <div className="flex gap-4">
-                            <button className="flex-1 bg-blue-600 text-white py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all active:scale-95 shadow-md">
-                                <img src={correction} alt="correct" className='w-10' />
+                        <div className="flex gap-4 space-x-6">
+                            <button className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white text-2xl cursor-pointer py-2 rounded-xl flex items-center justify-center gap-2 hover:indigo-700">
+                                <img src={correction} alt="correct" className='w-12' />
                                 <span>수정하기</span>
                             </button>
-                            <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 bg-blue-600 text-white py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all active:scale-95 shadow-md">
-                                <img src={logout} alt="logout" className='w-10' />
+                            <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white py-2 rounded-xl flex items-center justify-center gap-2 hover:indigo-700">
+                                <img src={logout} alt="logout" className='w-12' />
                                 <span>닫기</span>
                             </button>
                         </div>
