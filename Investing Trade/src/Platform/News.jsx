@@ -11,6 +11,8 @@ import refresh from '../assets/re.png';
 import correction from '../assets/correction-tape.png';
 import axios from 'axios';
 
+axios.defaults.baseURL = 'http://52.78.151.56:8080';
+
 const News = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -24,23 +26,30 @@ const News = () => {
 
     // 1. 랜덤 뉴스 불러오기 함수 (GET /news/random)
     const fetchRandomNews = async () => {
-        setLoading(true);
-        try {
-            const response = await axios.get('/news/random');
-            // ApiResponseNewsResponse 구조에 맞춰 데이터 추출
-            if (response.data.status === "SUCCESS") {
-                setNewsData(response.data.data);
-                setAiResult(null); // 새 뉴스 로딩 시 이전 AI 결과 초기화
-                setUserComment(""); // 코멘트 초기화
-                setSelectedSentiment(null);
+    setLoading(true);
+    try {
+        // [수정] localStorage에서 저장된 토큰을 가져와 헤더에 넣습니다.
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get('/news/random', {
+            headers: {
+                Authorization: `Bearer ${token}` // [중요] 403 에러 방지용 인증 헤더
             }
-        } catch (error) {
-            console.error("뉴스 로딩 실패:", error);
-            alert("뉴스를 불러오는 중 오류가 발생했습니다.");
-        } finally {
-            setLoading(false);
+        });
+
+        if (response.data.status === "SUCCESS") {
+            setNewsData(response.data.data);
+            setAiResult(null); 
+            setUserComment(""); 
+            setSelectedSentiment(null);
         }
-    };
+    } catch (error) {
+        console.error("뉴스 로딩 실패:", error);
+        // 에러 상세 내용을 alert에 띄워 백엔드 개발자와 소통하기 좋습니다.
+        alert(`뉴스를 불러오는 중 오류가 발생했습니다: ${error.response?.status || error.message}`);
+    } finally {
+        setLoading(false);
+    }
+};
 
     // [수정] 페이지 진입 시 뉴스를 자동으로 가져오도록 호출 추가
     useEffect(() => {
@@ -50,26 +59,30 @@ const News = () => {
 
     // 2. 의견 제출 함수 (POST /news/{newsId}/analyze)
     const handleSubmitOpinion = async () => {
-        if (!selectedSentiment || !userComment) {
-            alert("호재/악재 선택과 코멘트를 모두 입력해주세요.");
-            return;
-        }
+    if (!selectedSentiment || !userComment) {
+        alert("호재/악재 선택과 코멘트를 모두 입력해주세요.");
+        return;
+    }
 
-        try {
-            // AIAnalysisRequest 구조: { sentiment, reason }
-            const response = await axios.post(`/news/${newsData.newsId}/analyze`, {
-                sentiment: selectedSentiment,
-                reason: userComment
-            });
-
-            if (response.data.status === "SUCCESS") {
-                setAiResult(response.data.data); // AIAnalysisResponse 저장
+    try {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.post(`/news/${newsData.newsId}/analyze`, {
+            sentiment: selectedSentiment, // 백엔드 명세서에 따라 POSITIVE/NEGATIVE로 보낼지 확인 필요
+            reason: userComment
+        }, {
+            headers: {
+                Authorization: `Bearer ${token}` // [중요] 제출 권한 인증
             }
-        } catch (error) {
-            console.error("의견 제출 실패:", error);
-            alert("분석 제출 중 오류가 발생했습니다.");
+        });
+
+        if (response.data.status === "SUCCESS") {
+            setAiResult(response.data.data); 
         }
-    };
+    } catch (error) {
+        console.error("의견 제출 실패:", error);
+        alert("분석 제출 중 오류가 발생했습니다.");
+    }
+};
 
     return (
         <div className="w-full h-screen bg-blue-700 flex flex-col items-center md:p-2 font-agbalumo overflow-hidden">

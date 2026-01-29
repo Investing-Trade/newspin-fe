@@ -37,26 +37,29 @@ const SignUp = () => {
         }
 
         try {
-    // 1. axios.post(url, data) 형식이 더 간결합니다.
-    const response = await axios.post('/user/email/send-verification', { 
-      email: vEmail 
-    });
+            // [수정 포인트] 
+            // 1. 두 번째 인자(Body)는 null로 비워둡니다.
+            // 2. 세 번째 인자에 params를 넣어 URL 파라미터(?email=...) 방식으로 보냅니다.
+            const response = await axios.post('/user/email/send-verification', null, { 
+                params: { email: vEmail } 
+            });
 
-    // 2. 명세서의 ApiResponse 공통 규격인 status 확인
-    if (response.data.status === "SUCCESS") {
-      setIsCodeSent(true);
-      setTimer(180);
-      alert("인증번호가 발송되었습니다.");
-    } else {
-      // SUCCESS가 아니면 서버가 보낸 메시지 출력
-      alert(response.data.message || "인증번호 발송에 실패했습니다.");
-    }
-  } catch (error) {
-    const serverMessage = error.response?.data?.message;
-    alert(serverMessage || "서버 통신 오류가 발생했습니다.");
-    console.error("서버 에러 상세:", error.response?.data);
-  }
-};
+            // 명세서의 status가 소문자 "success"인지 대문자 "SUCCESS"인지 확인 필요
+            // Swagger에서는 소문자 "success"로 표시되므로 이에 맞춥니다.
+            if (response.data.status.toLowerCase() === "success" || response.data.code === "200") {
+                setIsCodeSent(true);
+                setTimer(180);
+                alert("인증번호가 발송되었습니다.");
+            } else {
+                alert(response.data.message || "인증번호 발송에 실패했습니다.");
+            }
+        } catch (error) {
+            // 500 에러 등의 상세 내용을 확인하기 위한 처리
+            const serverMessage = error.response?.data?.message;
+            alert(serverMessage || "이메일 전송 중 서버 오류가 발생했습니다.");
+            console.error("서버 에러 상세:", error.response?.data);
+        }
+    };
 
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
@@ -79,50 +82,45 @@ const SignUp = () => {
         mode: "onChange"
     });
 
-    // [수정] 제출 핸들러: 인증 확인 후 회원가입 및 JWT 토큰 처리
+    // [수정] 제출 핸들러: 인증 확인 후 회원가입 및 데이터 매핑 최적화
     const onSubmit = async (data) => {
         try {
             // 1. 인증 확인 (/user/email/verify)
-            const verifyRes = await axios({
-                method: 'post',
-                url: '/user/email/verify',
-                data: {
-                    email: data.verificationEmail,
-                    code: data.authCode
-                }
+            // 명세서 규격: EmailVerificationRequest { email, code }
+            const verifyRes = await axios.post('/user/email/verify', {
+                email: data.verificationEmail,
+                code: data.authCode
             });
 
-            // verified 결과 확인
-            if (!verifyRes.data.data.verified) {
-                alert(verifyRes.data.data.message || "인증번호 불일치");
+            // verified 결과 확인 (image_51cbd5.png 스키마 참조)
+            if (!verifyRes.data.data?.verified) {
+                alert(verifyRes.data.data?.message || "인증번호가 올바르지 않습니다.");
                 return;
             }
 
             // 2. 실제 회원가입 요청 (/user/sign-up)
-            const signUpRes = await axios({
-                method: 'post',
-                url: '/user/sign-up',
-                data: {
-                    email: data.email,
-                    password: data.password
-                }
+            // 명세서 규격: SignUpRequest { email, password }
+            const signUpRes = await axios.post('/user/sign-up', {
+                email: data.email,
+                password: data.password
             });
 
             if (signUpRes.data.status === "SUCCESS") {
-                // 가입 성공 시 응답에 JWT 토큰이 포함된 경우 저장
-                if (signUpRes.data.data?.accessToken) {
-                    const { accessToken, refreshToken, grantType } = signUpRes.data.data;
-
-                    localStorage.setItem('accessToken', accessToken);
-                    localStorage.setItem('refreshToken', refreshToken);
-                    axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
+                // 가입 성공 시 토큰이 담겨온다면(SignInResponse와 동일 구조일 경우) 처리
+                const authData = signUpRes.data.data?.jwtToken;
+                if (authData) {
+                    localStorage.setItem('accessToken', authData.accessToken);
+                    localStorage.setItem('refreshToken', authData.refreshToken);
+                    axios.defaults.headers.common['Authorization'] = `${authData.grantType} ${authData.accessToken}`;
                 }
 
                 alert("가입 완료! 로그인 후 투자 감각을 깨워보세요.");
-                navigate('/main'); // 메인 페이지로 이동
+                navigate('/main');
             }
         } catch (error) {
-            alert(error.response?.data?.message || "회원가입 처리 중 에러가 발생했습니다.");
+            // 403 Forbidden 혹은 400 Bad Request 상세 메시지 처리
+            const errorMsg = error.response?.data?.message || "회원가입 처리 중 에러가 발생했습니다.";
+            alert(errorMsg);
         }
     };
 

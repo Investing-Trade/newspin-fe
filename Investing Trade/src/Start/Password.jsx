@@ -46,11 +46,12 @@ const Password = () => {
           setIsCodeSent(true);
         }
       } else {
-        // [수정] 2단계: 코드 검증
-        // 명세서: POST /user/email/verify { email, code }
+
+        // 2단계: 코드 검증 및 비밀번호 변경 (API 설계에 따라 확인 필요)
         const verifyRes = await axios.post('/user/email/verify', {
           email: data.email,
-          code: data.authCode
+          code: data.authCode,
+          newPassword: data.newPassword // 비밀번호 변경을 한 번에 처리하는 경우
         });
 
         // 명세서 구조: verifyRes.data.data -> EmailVerificationResponse { verified, message }
