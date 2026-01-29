@@ -37,23 +37,26 @@ const SignUp = () => {
         }
 
         try {
-            // [수정] 실제 API 전송 시에도 vEmail 사용
-           await axios({
-                method: 'post',
-                url: '/user/email/send-verification',
-                data: { email: vEmail } 
-            });
+    // 1. axios.post(url, data) 형식이 더 간결합니다.
+    const response = await axios.post('/user/email/send-verification', { 
+      email: vEmail 
+    });
 
-            setIsCodeSent(true);
-            setTimer(180);
-            alert("인증번호가 발송되었습니다.");
-        } catch (error) {
-        // [수정] 서버가 보내준 구체적인 에러 메시지가 있다면 출력
-        const serverMessage = error.response?.data?.message;
-        alert(serverMessage || "서버 내부 오류가 발생했습니다. 백엔드 로그를 확인해 주세요.");
-        console.error("서버 에러 상세:", error.response?.data);
+    // 2. 명세서의 ApiResponse 공통 규격인 status 확인
+    if (response.data.status === "SUCCESS") {
+      setIsCodeSent(true);
+      setTimer(180);
+      alert("인증번호가 발송되었습니다.");
+    } else {
+      // SUCCESS가 아니면 서버가 보낸 메시지 출력
+      alert(response.data.message || "인증번호 발송에 실패했습니다.");
     }
-    };
+  } catch (error) {
+    const serverMessage = error.response?.data?.message;
+    alert(serverMessage || "서버 통신 오류가 발생했습니다.");
+    console.error("서버 에러 상세:", error.response?.data);
+  }
+};
 
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);

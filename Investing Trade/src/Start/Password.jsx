@@ -34,35 +34,42 @@ const Password = () => {
     setIsSubmitting(true);
     try {
       if (!isCodeSent) {
-        // [1단계] 인증 코드 발송
-        await axios({
-          method: 'post',
-          url: '/user/email/send-verification',
-          params: { email: data.email }
+        // [수정] 1단계: 인증 코드 발송
+        // 명세서: POST /user/email/send-verification { email }
+        const response = await axios.post('/user/email/send-verification', {
+          email: data.email
         });
 
-        alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
-        setIsCodeSent(true);
+        // ApiResponse 공통 구조에 따른 성공 체크
+        if (response.data.status === "SUCCESS") {
+          alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
+          setIsCodeSent(true);
+        }
       } else {
-        // [2단계] 코드 검증
+        // [수정] 2단계: 코드 검증
+        // 명세서: POST /user/email/verify { email, code }
         const verifyRes = await axios.post('/user/email/verify', {
           email: data.email,
           code: data.authCode
         });
 
-        // 결과 확인
-        if (verifyRes.data.data?.verified) {
-          // [알림] 실제 비밀번호 변경 API가 목록에 없으므로 시뮬레이션 처리
-          // 나중에 백엔드 API가 생기면 여기에 추가 axios 요청을 작성해야 합니다.
+        // 명세서 구조: verifyRes.data.data -> EmailVerificationResponse { verified, message }
+        const verifyData = verifyRes.data.data;
 
-          alert("비밀번호 변경이 완료되었습니다!");
-          navigate('/login'); // 성공 시에만 이동
+        if (verifyData?.verified) {
+          /* [참고] 현재 제공된 API 목록에는 비밀번호 "재설정" API가 없습니다.
+             인증이 성공했으므로 우선 성공 메시지를 띄우고 로그인으로 이동시킵니다.
+             추후 비밀번호 변경 API가 추가되면 여기에 해당 호출을 넣으시면 됩니다. */
+          alert("이메일 인증이 완료되었습니다. 로그인 후 비밀번호를 변경해주세요.");
+          navigate('/login');
         } else {
-          alert(verifyRes.data.data.message || "인증 코드가 일치하지 않습니다.");
+          alert(verifyData?.message || "인증 코드가 일치하지 않습니다.");
         }
       }
     } catch (error) {
-      alert(error.response?.data?.message || "통신 중 오류가 발생했습니다.");
+      // 서버 에러 응답 처리
+      const serverMessage = error.response?.data?.message || "통신 중 오류가 발생했습니다.";
+      alert(serverMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -102,7 +109,7 @@ const Password = () => {
           </h2>
 
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-            
+
             {/* 이메일 필드 */}
             <div className="space-y-2">
               <p className='font-jua text-lg pb-1'>이메일</p>

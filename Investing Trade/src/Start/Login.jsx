@@ -23,33 +23,48 @@ const Login = () => {
     mode: "onChange"
   });
 
-  // [수정] 로그인 제출 핸들러: SignIn API 연동 및 JWT 저장
- const onSubmit = async (data) => {
+  // [연동 수정] API 명세서 구조 반영
+  const onSubmit = async (data) => {
     try {
-      // API 명세: POST /user/sign-in { email, password }
+      // 1. API 호출: 명세서의 SignInRequest { email, password } 전달
       const response = await axios.post('/user/sign-in', {
         email: data.email,
         password: data.password
       });
 
-      // API 명세: ApiResponseSignInResponse -> data 내부에 jwtToken 존재
-      // 구조: response.data.data.jwtToken { grantType, accessToken, refreshToken }
-      if (response.data.status === "SUCCESS") {
-        const { grantType, accessToken, refreshToken } = response.data.data.jwtToken;
+      /* API 명세 분석:
+         ApiResponseSignInResponse {
+           status: string,
+           code: string,
+           message: string,
+           data: SignInResponse {
+             jwtToken: JwtToken { grantType, accessToken, refreshToken }
+           }
+         }
+      */
+      const resData = response.data;
 
-        // 1. 브라우저 저장소에 토큰 저장
+      if (resData.status === "SUCCESS" || resData.code === "200") {
+        // 명세서 상의 data -> jwtToken 경로 추출
+        const { grantType, accessToken, refreshToken } = resData.data.jwtToken;
+
+        // 2. 로컬 스토리지 저장
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
+        localStorage.setItem('grantType', grantType);
 
-        // 2. 이후 요청을 위한 Axios 기본 헤더 설정
+        // 3. Axios 공통 헤더 설정 (Bearer 토큰 형태)
         axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
 
         alert("로그인 성공! 투자 여정을 시작합니다.");
-        navigate('/main'); // 로그인 성공 후 메인 페이지로 이동
+        navigate('/main');
+      } else {
+        // 성공 응답 형식이지만 status가 SUCCESS가 아닌 경우 처리
+        alert(resData.message || "로그인 정보를 확인해주세요.");
       }
     } catch (error) {
-      // 서버에서 내려주는 에러 메시지 출력
-      const errorMessage = error.response?.data?.message || "로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.";
+      // 서버 에러 응답 (ApiResponseVoid 형태일 가능성이 높음)
+      const errorMessage = error.response?.data?.message || "서버와의 통신 중 오류가 발생했습니다.";
       alert(errorMessage);
       console.error("Login Error:", error.response?.data);
     }
