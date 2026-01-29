@@ -11,22 +11,54 @@ import exchange from '../assets/stock-exchange.png';
 import portfolio from '../assets/pie-chart.png';
 import logout from '../assets/logout.png';
 import correction from '../assets/correction-tape.png';
+import axios from 'axios'; // [추가] axios 임포트
 
 const Invest = () => {
-    const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
-    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false); // 모달 상태 관리를 위한 state
+    const navigate = useNavigate();
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    
+    // --- [수정] 사용자 정보를 저장할 State 추가 ---
+    const [userInfo, setUserInfo] = useState({
+        userId: "",
+        email: "",
+        password: "********" // 보안상 비밀번호는 마스킹 처리하거나 비워둠
+    });
+
+    // --- [추가] 내 정보 불러오기 API 호출 ---
+    const fetchUserInfo = async () => {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const response = await axios.get('/user/me', { // 명세서의 GET /user/me 호출
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            if (response.data.status === "SUCCESS") {
+                const { userId, email } = response.data.data;
+                setUserInfo((prev) => ({
+                    ...prev,
+                    userId: userId || "N/A",
+                    email: email || "N/A"
+                }));
+            }
+        } catch (error) {
+            console.error("사용자 정보 로드 실패:", error);
+            // 토큰이 만료되었거나 에러 발생 시 로그인 페이지로 이동시킬 수 있음
+        }
+    };
+
     useEffect(() => {
         document.title = "NewsPin - Invest";
+        fetchUserInfo(); // [추가] 페이지 진입 시 사용자 정보 로드
     }, []);
 
     return (
         <div className="w-full min-h-screen bg-blue-700 flex flex-col items-center p-8 font-sans">
 
-            {/* [상단 헤더 영역] 로고 및 상단 메뉴 */}
+            {/* [상단 헤더 영역] 그대로 유지 */}
             <div className="w-full max-w-6xl flex justify-between items-start mb-14">
                 <div className="flex items-center gap-4">
-
-                    {/* 캐릭터 이미지와 로고 */}
                     <div className="relative w-108">
                         <img src={predictiveAnalytics} alt="analysis" className='absolute w-20 -top-12 left-21 drop-shadow-md' />
                         <img src={businessMan} alt="man" className="absolute w-20 left-4 drop-shadow-md" />
@@ -36,25 +68,22 @@ const Invest = () => {
                 </div>
 
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
-                    {/* 2. 내 정보 클릭 시 모달 열기 */}
                     <button
                         onClick={() => setIsProfileModalOpen(true)}
                         className="hover:underline font-jua cursor-pointer"
                     >
                         내 정보
-                    </button>                    <span className='font-bold mb-2'>|</span>
+                    </button> <span className='font-bold mb-2'>|</span>
                     <button onClick={() => navigate('/login')} className="hover:underline font-jua cursor-pointer">로그아웃</button>
                 </div>
             </div>
 
-            {/* [중앙 카드 섹션] 3개 컬럼 배치 */}
-            <div className="w-full max-w-6xl  grid grid-cols-1 md:grid-cols-3 gap-10">
-
-                {/* 1. 뉴스 학습 카드 */}
+            {/* [중앙 카드 섹션] 그대로 유지 */}
+            <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-10">
+                {/* 뉴스 학습 카드 */}
                 <div onClick={() => navigate('/News')} className="bg-white border-white border-4 border-solid hover:bg-red-500 active:scale-[0.98] transition-all rounded-[2rem] p-10 flex flex-col items-center shadow-xl flex-1 cursor-pointer">
-                    <h2 className="text-4xl mb-8 text-black font-jua  ">뉴스 학습</h2>
+                    <h2 className="text-4xl mb-8 text-black font-jua">뉴스 학습</h2>
                     <div className="h-40 flex items-center mb-8 space-x-6">
-                        {/* 전구 및 뉴스 아이콘 */}
                         <img src={headline} alt="headline" className='w-36' />
                         <img src={video} alt="video" className='w-32' />
                     </div>
@@ -65,7 +94,7 @@ const Invest = () => {
                     </div>
                 </div>
 
-                {/* 2. 모의 투자 카드 */}
+                {/* 모의 투자 카드 */}
                 <div onClick={() => navigate('/Trade')} className="bg-white rounded-[2rem] border-4 hover:bg-green-500 active:scale-[0.98] transition-all rounded-[2rem] border-white border-solid p-10 flex flex-col items-center shadow-xl min-h-[550px] cursor-pointer">
                     <h2 className="text-4xl mb-8 text-black font-jua">모의 투자</h2>
                     <div className="h-40 flex items-center mb-8 space-x-6">
@@ -73,14 +102,14 @@ const Invest = () => {
                         <img src={stock} alt="stock-market" className='w-32' />
                     </div>
                     <div className="space-y-4 text-left w-full text-xl text-gray-800 break-keep">
-                        <p className='font-jua' >실제 주가 데이터를 활용한 가상 투자</p>
+                        <p className='font-jua'>실제 주가 데이터를 활용한 가상 투자</p>
                         <p className='font-jua'>기간과 자금을 설정하고 종목 매수·매도</p>
                         <p className='font-jua'>AI가 투자 패턴과 뉴스 판단을 분석해 전략 개선 지원</p>
                     </div>
                 </div>
 
-                {/* 3. 내 포트폴리오 카드 */}
-                <div onClick={() => navigate('/portfolio')} className="bg-white rounded-[2rem] border-4  hover:bg-blue-400 active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white p-10 flex flex-col items-center shadow-xl min-h-[550px] cursor-pointer">
+                {/* 내 포트폴리오 카드 */}
+                <div onClick={() => navigate('/portfolio')} className="bg-white rounded-[2rem] border-4 hover:bg-blue-400 active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white p-10 flex flex-col items-center shadow-xl min-h-[550px] cursor-pointer">
                     <h2 className="text-4xl mb-8 text-black font-jua">내 포트폴리오</h2>
                     <div className="h-40 flex items-center mb-8 space-x-6">
                         <img src={portfolio} alt="portfolio" className='w-32' />
@@ -105,7 +134,7 @@ const Invest = () => {
                                 <label className="block mb-2">아이디</label>
                                 <input
                                     type="text"
-                                    value="investingTrade"
+                                    value={userInfo.userId} // [수정] 실제 데이터 반영
                                     readOnly
                                     className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
                                 />
@@ -114,7 +143,7 @@ const Invest = () => {
                                 <label className="block mb-2">비밀번호</label>
                                 <input
                                     type="password"
-                                    value="password123" // 추후 변경
+                                    value={userInfo.password} // [수정] 고정값 대신 상태값 반영
                                     readOnly
                                     className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
                                 />
@@ -123,7 +152,7 @@ const Invest = () => {
                                 <label className="block mb-2">이메일</label>
                                 <input
                                     type="email"
-                                    value="newsanalyst35144@gmail.com" // 추후 변경
+                                    value={userInfo.email} // [수정] 실제 데이터 반영
                                     readOnly
                                     className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
                                 />
