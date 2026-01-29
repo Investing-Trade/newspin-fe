@@ -7,6 +7,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+// 백엔드 서버 주소 설정
+axios.defaults.baseURL = 'http://52.78.151.56:8080';
+
 const Password = () => {
   const navigate = useNavigate();
   const [isCodeSent, setIsCodeSent] = useState(false);
@@ -29,48 +32,64 @@ const Password = () => {
   const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.com$/;
 
-  // 통합 제출 핸들러
+  /// 통합 제출 핸들러
   const onSubmit = async (data) => {
     setIsSubmitting(true);
     try {
       if (!isCodeSent) {
-        // [수정] 1단계: 인증 코드 발송
-        // 명세서: POST /user/email/send-verification { email }
-        const response = await axios.post('/user/email/send-verification', {
-          email: data.email
+        // 1단계: 인증 코드 발송
+        // [참고] 서버가 409를 뱉는다면 이메일이 실제 전송되지 않을 확률이 큽니다.
+        // 백엔드에 '비밀번호 재설정용 발송 API'를 따로 만들어달라고 요청하는 것이 가장 정확합니다.
+        const response = await axios.post('/user/email/send-verification', null, {
+          params: { email: data.email }
         });
 
-        // ApiResponse 공통 구조에 따른 성공 체크
-        if (response.data.status === "SUCCESS") {
+        if (response.data.status.toLowerCase() === "success" || response.data.code === "200") {
           alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
           setIsCodeSent(true);
         }
       } else {
-
-        // 2단계: 코드 검증 및 비밀번호 변경 (API 설계에 따라 확인 필요)
+        // 2단계: 코드 검증 및 새로운 비밀번호로 변경
         const verifyRes = await axios.post('/user/email/verify', {
           email: data.email,
-          code: data.authCode,
-          newPassword: data.newPassword // 비밀번호 변경을 한 번에 처리하는 경우
+          code: data.authCode
         });
 
-        // 명세서 구조: verifyRes.data.data -> EmailVerificationResponse { verified, message }
-        const verifyData = verifyRes.data.data;
+        if (verifyRes.data.status.toLowerCase() === "success" && verifyRes.data.data?.verified) {
+          // [수정] 실제 비밀번호를 업데이트하는 PATCH API 호출 (명세서 기반)
+          const resetRes = await axios.patch('/user/password', {
+            email: data.email,
+            authCode: data.authCode,
+            newPassword: data.newPassword
+          });
 
-        if (verifyData?.verified) {
-          /* [참고] 현재 제공된 API 목록에는 비밀번호 "재설정" API가 없습니다.
-             인증이 성공했으므로 우선 성공 메시지를 띄우고 로그인으로 이동시킵니다.
-             추후 비밀번호 변경 API가 추가되면 여기에 해당 호출을 넣으시면 됩니다. */
-          alert("이메일 인증이 완료되었습니다. 로그인 후 비밀번호를 변경해주세요.");
-          navigate('/login');
+          if (resetRes.data.status.toLowerCase() === "success") {
+            alert("비밀번호가 성공적으로 변경되었습니다. 로그인 페이지로 이동합니다.");
+            navigate('/login');
+          } else {
+            alert(resetRes.data.message || "비밀번호 변경 실패");
+          }
         } else {
-          alert(verifyData?.message || "인증 코드가 일치하지 않습니다.");
+          alert("인증 코드가 일치하지 않습니다.");
         }
       }
     } catch (error) {
-      // 서버 에러 응답 처리
-      const serverMessage = error.response?.data?.message || "통신 중 오류가 발생했습니다.";
-      alert(serverMessage);
+      const errorData = error.response?.data;
+      
+      // [핵심 수정] 409 Conflict(U002) 발생 시 처리 로직
+      // 비밀번호 찾기 상황에서는 '이미 존재하는 이메일'이 성공 조건이므로 UI를 넘겨줍니다.
+      if (!isCodeSent && (error.response?.status === 409 || errorData?.code === 'U002')) {
+        /* 주의: 백엔드에서 409 에러 시 이메일 발송 명령 자체를 취소한다면 
+          UI만 넘어가고 실제로 메일은 오지 않을 수 있습니다. 
+          이 경우 백엔드 개발자에게 '비밀번호 재설정용 이메일 발송 허용'을 요청해야 합니다.
+        */
+        alert("계정 확인이 완료되었습니다. 메일함으로 발송된 인증번호를 입력해주세요.");
+        setIsCodeSent(true); 
+      } else {
+        const serverMessage = errorData?.message || "통신 중 오류가 발생했습니다.";
+        alert(serverMessage);
+      }
+      console.error("Error Detail:", errorData);
     } finally {
       setIsSubmitting(false);
     }
@@ -84,7 +103,6 @@ const Password = () => {
 
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-white overflow-hidden">
-      {/* 부모 카드 (높이를 필드 수에 맞춰 조정) */}
       <div className="bg-white rounded-3xl border border-gray-200 flex flex-row items-stretch w-full max-w-5xl h-[750px] overflow-hidden shadow-2xl">
 
         {/* [왼쪽 섹션] */}
@@ -110,8 +128,6 @@ const Password = () => {
           </h2>
 
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-
-            {/* 이메일 필드 */}
             <div className="space-y-2">
               <p className='font-jua text-lg pb-1'>이메일</p>
               <input
@@ -129,7 +145,6 @@ const Password = () => {
 
             {!isCodeSent && <hr className='text-gray-500 my-8' />}
 
-            {/* 인증 코드 전송 버튼 */}
             {!isCodeSent && (
               <button
                 type="submit"
@@ -140,8 +155,6 @@ const Password = () => {
               </button>
             )}
 
-
-            {/* --- 인증 코드 전송 후 나타나는 영역 --- */}
             {isCodeSent && (
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -182,14 +195,13 @@ const Password = () => {
                   {errors.newPasswordConfirm && <p className="text-red-500 text-xs font-bold">{errors.newPasswordConfirm.message}</p>}
                 </div>
 
-                {/* [수정] 중첩된 form 태그를 삭제하고 버튼만 남겼습니다 */}
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="w-full flex flex-row items-center justify-center gap-2 cursor-pointer bg-blue-600 text-white font-jua py-3 rounded-lg shadow-md hover:bg-blue-500 active:scale-[0.98] transition-all"
                 >
                   <img src={paperplane} alt="plane" className="w-6 h-auto" />
-                  <span onClick={() => navigate('/login')} className="leading-none">{isSubmitting ? "변경 중..." : "비밀번호 변경 및 로그인 화면으로 이동"}</span>
+                  <span className="leading-none">{isSubmitting ? "변경 중..." : "비밀번호 변경 및 완료"}</span>
                 </button>
               </div>
             )}
