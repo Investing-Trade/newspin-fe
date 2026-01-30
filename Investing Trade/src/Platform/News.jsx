@@ -215,7 +215,7 @@ const News = () => {
                                 <span>재학습</span>
                             </button>
 
-                            <button onClick={() => navigate('/invest')} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
+                            <button onClick={() => navigate('/main')} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
                                 <img src={logout} alt="dislike" className="w-8" />
                                 <span >학습종료</span>
                             </button>

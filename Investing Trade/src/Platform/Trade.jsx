@@ -284,7 +284,7 @@ const Trade = () => {
                         <button className="cursor-pointer bg-sky-500 text-white hover:bg-amber-200 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
                             <span className="text-lg">📅</span> 다음 날짜
                         </button>
-                        <button onClick={() => navigate('/invest')} className="cursor-pointer hover:bg-blue-700 active:scale-[0.90] transition-all bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-violet-500">
+                        <button onClick={() => navigate('/main')} className="cursor-pointer hover:bg-blue-700 active:scale-[0.90] transition-all bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-violet-500">
                             <span className="text-lg">🏠</span> 메인 화면 이동
                         </button>
                     </div>
