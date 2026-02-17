@@ -14,7 +14,6 @@ import axios from 'axios';
 const News = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-
     const [newsData, setNewsData] = useState(null); 
     const [userComment, setUserComment] = useState(""); 
     const [selectedSentiment, setSelectedSentiment] = useState(null); 
@@ -22,25 +21,30 @@ const News = () => {
     const [loading, setLoading] = useState(false);
 
     const [userInfo, setUserInfo] = useState({
-        email: localStorage.getItem('userEmail') || "정보 없음",
+        email: "",
         password: "********"
     });
 
-    // 1. 랜덤 뉴스 불러오기 함수 (GET /news/random)
+    // 1. 내 정보 불러오기 (GET /user/me)
+    const fetchUserInfo = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/user/me`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (response.data.status === "SUCCESS") {
+                setUserInfo(prev => ({ ...prev, email: response.data.data.email }));
+            }
+        } catch (error) {
+            console.error("사용자 정보 로드 실패:", error);
+        }
+    };
+
+    // 2. 랜덤 뉴스 불러오기 (GET /news/random)
     const fetchRandomNews = async () => {
         setLoading(true);
-        const token = localStorage.getItem('accessToken');
-        
-        // 디버깅용 콘솔 로그
-        console.log("-------------------------------");
-        console.log("요청 주소: http://52.78.151.56:8080/news/random");
-        console.log("보내는 토큰:", token);
-
         try {
-            const response = await axios.get('http://52.78.151.56:8080/news/random', {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
+            const response = await axios.get(`${API_BASE_URL}/news/random`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
             if (response.data.status === "SUCCESS") {
@@ -50,48 +54,36 @@ const News = () => {
                 setSelectedSentiment(null);
             }
         } catch (error) {
-            console.error("❌ 뉴스 로딩 에러 상세 리포트");
-            if (error.response) {
-                // [핵심 수정] 서버가 404/403을 줄 때의 진짜 응답 내용을 출력합니다.
-                console.log("상태 코드:", error.response.status);
-                console.log("서버 응답 데이터(진짜 원인):", error.response.data);
-                
-                if (error.response.status === 403 || error.response.status === 404) {
-                    alert("보안 토큰이 거절되었습니다. 백엔드 보안 설정(SecurityConfig) 확인이 필요합니다.");
-                }
-            } else {
-                console.log("네트워크 에러 또는 서버 미응답");
+            console.error("뉴스 로딩 에러:", error.response?.data || error.message);
+            if (error.response?.status === 401) {
+                alert("세션이 만료되었습니다. 다시 로그인해주세요.");
+                navigate('/login');
             }
         } finally {
             setLoading(false);
-            console.log("-------------------------------");
         }
     };
 
-    useEffect(() => {
-        document.title = "NewsPin - News";
-        fetchRandomNews();
-    }, []);
-
-    // 2. 의견 제출 함수 (POST /news/{newsId}/analyze)
+    // 3. 의견 제출 및 AI 분석 (POST /news/{newsId}/analyze)
     const handleSubmitOpinion = async () => {
         if (!selectedSentiment || !userComment || !newsData) {
-            alert("입력 정보를 확인해주세요.");
+            alert("판단 결과와 근거 코멘트를 모두 입력해주세요.");
             return;
         }
 
         try {
-            const token = localStorage.getItem('accessToken');
+            // API 명세의 AIAnalysisRequest 형식: { sentiment: string, reason: string }
             const sentimentValue = selectedSentiment === "호재" ? "POSITIVE" : "NEGATIVE";
 
-            const response = await axios.post(`http://52.78.151.56:8080/news/${newsData.newsId}/analyze`, {
+            const response = await axios.post(`${API_BASE_URL}/news/${newsData.newsId}/analyze`, {
                 sentiment: sentimentValue,
                 reason: userComment
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            if (response.data && response.data.status === "SUCCESS") {
+            if (response.data.status === "SUCCESS") {
+                // API 명세의 AIAnalysisResponse 형식: { aiSentiment, aiFeedback, correct }
                 setAiResult(response.data.data);
             }
         } catch (error) {
@@ -99,6 +91,30 @@ const News = () => {
             alert("분석 제출 중 오류가 발생했습니다.");
         }
     };
+
+    // 4. 로그아웃 (POST /user/logout)
+    const handleLogout = async () => {
+        try {
+            await axios.post(`${API_BASE_URL}/user/logout`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            console.error("서버 로그아웃 처리 실패:", error);
+        } finally {
+            localStorage.clear();
+            navigate('/login');
+        }
+    };
+
+    useEffect(() => {
+        document.title = "NewsPin - News";
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+        fetchUserInfo();
+        fetchRandomNews();
+    }, []);
 
     return (
         <div className="w-full h-screen bg-blue-700 flex flex-col items-center md:p-2 font-agbalumo overflow-hidden">
@@ -228,7 +244,7 @@ const News = () => {
                                 className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-cyan-500"
                             >
                                 <img src={refresh} alt="refresh" className="w-8" />
-                                <span>재학습</span>
+                                <span>다음 뉴스</span>
                             </button>
 
                             <button onClick={() => navigate('/main')} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
