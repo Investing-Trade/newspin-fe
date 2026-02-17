@@ -13,6 +13,10 @@ import axios from 'axios';
 
 const News = () => {
     const navigate = useNavigate();
+
+    const API_BASE_URL = 'http://52.78.151.56:8080';
+    const token = localStorage.getItem('accessToken');
+
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [newsData, setNewsData] = useState(null); 
     const [userComment, setUserComment] = useState(""); 
@@ -108,10 +112,11 @@ const News = () => {
 
     useEffect(() => {
         document.title = "NewsPin - News";
-        if (!token) {
-            navigate('/login');
-            return;
-        }
+        if (!token || token === "undefined" || token === "null") {
+        alert("로그인이 필요합니다.");
+        navigate('/login');
+        return;
+    }
         fetchUserInfo();
         fetchRandomNews();
     }, []);
@@ -237,7 +242,7 @@ const News = () => {
                                 </>
                             )}
                         </div>
-
+B
                         <div className="flex gap-20 mt-1 w-[50%] ml-60 items-center justify-center">
                             <button
                                 onClick={fetchRandomNews}
