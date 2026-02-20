@@ -18,10 +18,10 @@ const News = () => {
     const token = localStorage.getItem('accessToken');
 
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [newsData, setNewsData] = useState(null); 
-    const [userComment, setUserComment] = useState(""); 
-    const [selectedSentiment, setSelectedSentiment] = useState(null); 
-    const [aiResult, setAiResult] = useState(null); 
+    const [newsData, setNewsData] = useState(null);
+    const [userComment, setUserComment] = useState("");
+    const [selectedSentiment, setSelectedSentiment] = useState(null);
+    const [aiResult, setAiResult] = useState(null);
     const [loading, setLoading] = useState(false);
 
     const [userInfo, setUserInfo] = useState({
@@ -68,31 +68,48 @@ const News = () => {
         }
     };
 
-    // 3. 의견 제출 및 AI 분석 (POST /news/{newsId}/analyze)
+    // 3. 의견 제출 및 AI 분석 (형식 일치화 작업)
     const handleSubmitOpinion = async () => {
-        if (!selectedSentiment || !userComment || !newsData) {
+        // newsData가 유효한지, newsId가 존재하는지 먼저 확인
+        if (!newsData || !newsData.newsId) {
+            alert("뉴스 데이터가 올바르지 않습니다.");
+            return;
+        }
+
+        if (!selectedSentiment || !userComment) {
             alert("판단 결과와 근거 코멘트를 모두 입력해주세요.");
             return;
         }
 
-        try {
-            // API 명세의 AIAnalysisRequest 형식: { sentiment: string, reason: string }
-            const sentimentValue = selectedSentiment === "호재" ? "POSITIVE" : "NEGATIVE";
+        // 서버 ENUM 형식에 맞춘 대문자 고정
+        const sentimentValue = selectedSentiment === "호재" ? "POSITIVE" : "NEGATIVE";
 
-            const response = await axios.post(`${API_BASE_URL}/news/${newsData.newsId}/analyze`, {
-                sentiment: sentimentValue,
-                reason: userComment
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+        // AIAnalysisRequest 형식에 맞춘 객체 생성
+        const requestData = {
+            sentiment: sentimentValue, // 필수 필드 1
+            reason: userComment.trim() // 필수 필드 2 (공백 제거)
+        };
+
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/news/${newsData.newsId}/analyze`,
+                requestData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json' // 500 에러 방지를 위해 명시
+                    }
+                }
+            );
 
             if (response.data.status === "SUCCESS") {
-                // API 명세의 AIAnalysisResponse 형식: { aiSentiment, aiFeedback, correct }
                 setAiResult(response.data.data);
             }
         } catch (error) {
-            console.error("의견 제출 실패:", error);
-            alert("분석 제출 중 오류가 발생했습니다.");
+            // 서버가 왜 화가 났는지(500) 상세 이유를 확인하기 위한 로그
+            console.error("전송 데이터:", requestData);
+            console.error("에러 응답:", error.response?.data);
+            alert(`의견 제출 실패: ${error.response?.data?.message || "형식 오류가 발생했습니다."}`);
         }
     };
 
@@ -113,10 +130,10 @@ const News = () => {
     useEffect(() => {
         document.title = "NewsPin - News";
         if (!token || token === "undefined" || token === "null") {
-        alert("로그인이 필요합니다.");
-        navigate('/login');
-        return;
-    }
+            alert("로그인이 필요합니다.");
+            navigate('/login');
+            return;
+        }
         fetchUserInfo();
         fetchRandomNews();
     }, []);
@@ -242,7 +259,7 @@ const News = () => {
                                 </>
                             )}
                         </div>
-B
+                        B
                         <div className="flex gap-20 mt-1 w-[50%] ml-60 items-center justify-center">
                             <button
                                 onClick={fetchRandomNews}
