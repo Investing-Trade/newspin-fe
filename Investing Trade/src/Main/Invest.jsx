@@ -16,7 +16,7 @@ import axios from 'axios'; // [추가] axios 임포트
 const Invest = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    
+
     // --- [수정] 사용자 정보를 저장할 State 추가 ---
     const [userInfo, setUserInfo] = useState({
         userId: "",
@@ -48,6 +48,27 @@ const Invest = () => {
         }
     };
 
+    // --- [추가] 로그아웃 API 연동 로직 ---
+    const handleLogout = async () => {
+        try {
+            const token = localStorage.getItem('accessToken');
+
+            // 1. 서버에 로그아웃 요청 전송
+            await axios.post('/user/logout', {}, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+        } catch (error) {
+            console.error("서버 로그아웃 처리 실패:", error);
+        } finally {
+            // 2. 서버 응답 성공/실패 여부와 상관없이 로컬 토큰 삭제 및 페이지 이동
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            navigate('/login');
+        }
+    };
+
     useEffect(() => {
         document.title = "NewsPin - Invest";
         fetchUserInfo(); // [추가] 페이지 진입 시 사용자 정보 로드
@@ -56,7 +77,7 @@ const Invest = () => {
     return (
         <div className="w-full min-h-screen bg-blue-700 flex flex-col items-center p-8 font-sans">
 
-            {/* [상단 헤더 영역] 그대로 유지 */}
+            {/* [상단 헤더 영역] */}
             <div className="w-full max-w-6xl flex justify-between items-start mb-14">
                 <div className="flex items-center gap-4">
                     <div className="relative w-108">
@@ -74,8 +95,13 @@ const Invest = () => {
                     >
                         내 정보
                     </button> <span className='font-bold mb-2'>|</span>
-                    <button onClick={() => navigate('/login')} className="hover:underline font-jua cursor-pointer">로그아웃</button>
-                </div>
+                    {/* [수정] handleLogout 함수 연결 */}
+                    <button
+                        onClick={handleLogout}
+                        className="hover:underline font-jua cursor-pointer"
+                    >
+                        로그아웃
+                    </button>                </div>
             </div>
 
             {/* [중앙 카드 섹션] 그대로 유지 */}

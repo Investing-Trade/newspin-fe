@@ -6,6 +6,9 @@ import { useForm } from 'react-hook-form';
 import { useEffect } from 'react';
 import axios from 'axios';
 
+// API 서버의 Base URL 설정
+const API_BASE_URL = "http://52.78.151.56:8080";
+
 const Login = () => {
   const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
 
@@ -24,54 +27,85 @@ const Login = () => {
   });
 
   // [연동 수정] API 명세서 구조 반영
-  const onSubmit = async (data) => {
+ const onSubmit = async (data) => {
     try {
-      // 1. API 호출: 명세서의 SignInRequest { email, password } 전달
-      const response = await axios.post('/user/sign-in', {
-        email: data.email,
-        password: data.password
+      // 1. 요청 데이터 로그 확인 (스웨거의 데이터 형식과 일치하는지 확인용)
+      console.log("전송 데이터:", { email: data.email, password: data.password });
+
+      const response = await axios({
+        method: 'post',
+        url: `${API_BASE_URL}/user/sign-in`, // 주소 확인: http://52.78.151.56:8080/user/sign-in
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': '*/*'
+        },
+        data: {
+          email: data.email,
+          password: data.password
+        }
       });
 
-      /* API 명세 분석:
-         ApiResponseSignInResponse {
-           status: string,
-           code: string,
-           message: string,
-           data: SignInResponse {
-             jwtToken: JwtToken { grantType, accessToken, refreshToken }
-           }
-         }
-      */
       const resData = response.data;
 
-      if (resData.status === "SUCCESS" || resData.code === "200") {
-        // 명세서 상의 data -> jwtToken 경로 추출
+      // 2. 명세서에 따른 성공 조건 체크 (status: "SUCCESS")
+      if (resData.status === "SUCCESS") {
+        // 명세서 구조: data { jwtToken { grantType, accessToken, refreshToken } }
         const { grantType, accessToken, refreshToken } = resData.data.jwtToken;
 
-        // 2. 로컬 스토리지 저장
+        // 로컬 스토리지 저장
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
         localStorage.setItem('grantType', grantType);
 
-        // 3. Axios 공통 헤더 설정 (Bearer 토큰 형태)
-        axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
+       // 3. 헤더 설정 시 공백 주의
+      axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
 
-        alert("로그인 성공! 투자 여정을 시작합니다.");
-        navigate('/main');
-      } else {
-        // 성공 응답 형식이지만 status가 SUCCESS가 아닌 경우 처리
-        alert(resData.message || "로그인 정보를 확인해주세요.");
-      }
-    } catch (error) {
-      // 서버 에러 응답 (ApiResponseVoid 형태일 가능성이 높음)
-      const errorMessage = error.response?.data?.message || "서버와의 통신 중 오류가 발생했습니다.";
-      alert(errorMessage);
-      console.error("Login Error:", error.response?.data);
+      alert("로그인 성공!");
+      navigate('/main');
+    } else {
+      alert(resData.message || "로그인 정보를 확인해주세요.");
     }
-  };
+  } catch (error) {
+    // 서버가 C999를 던질 때 에러 객체 구조 확인
+    const serverMessage = error.response?.data?.message || "서버 내부 오류가 발생했습니다.";
+    console.error("Login Error Details:", error.response?.data);
+    alert(serverMessage);
+  }
+};
 
-  // 정규식: 영문, 한글, 숫자, 특수문자 조합 8자 이상
   const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
+
+const handleSendCode = async () => {
+  const emailValue = getValues("email");
+  if (!emailValue) {
+    alert("이메일을 입력해주세요.");
+    return;
+  }
+
+  try {
+    // 1. 요청 직전 데이터 로그 확인
+    console.log("인증번호 발송 요청 이메일:", emailValue);
+
+    const response = await axios.post('http://52.78.151.56:8080/user/email/send-verification', 
+      null, // Body가 비어있고 쿼리 파라미터로 보내는 경우일 수도 있으니 명세서 재확인 필요
+      {
+        params: { email: emailValue } // 만약 쿼리 파라미터 방식이라면 이렇게 변경
+      }
+    );
+
+    // 만약 Body에 담아 보내는 방식이라면:
+    // const response = await axios.post('http://52.78.151.56:8080/user/email/send-verification', {
+    //   email: emailValue
+    // });
+
+    if (response.data.status === "SUCCESS") {
+      alert("인증번호가 발송되었습니다.");
+    }
+  } catch (error) {
+    console.error("인증번호 발송 에러 상세:", error.response?.data);
+    alert(error.response?.data?.message || "인증번호 발송 중 서버 오류가 발생했습니다.");
+  }
+};
 
   // 실시간 테두리 스타일 결정 함수
   const getBorderStyle = (fieldName) => {

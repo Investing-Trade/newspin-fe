@@ -37,27 +37,27 @@ const SignUp = () => {
         }
 
         try {
-            // [수정 포인트] 
-            // 1. 두 번째 인자(Body)는 null로 비워둡니다.
-            // 2. 세 번째 인자에 params를 넣어 URL 파라미터(?email=...) 방식으로 보냅니다.
-            const response = await axios.post('/user/email/send-verification', null, { 
-                params: { email: vEmail } 
+            const response = await axios.post('/user/email/send-verification', null, {
+                params: { email: vEmail }
             });
 
-            // 명세서의 status가 소문자 "success"인지 대문자 "SUCCESS"인지 확인 필요
-            // Swagger에서는 소문자 "success"로 표시되므로 이에 맞춥니다.
-            if (response.data.status.toLowerCase() === "success" || response.data.code === "200") {
+            // 수정: status가 "SUCCESS"가 아닐 경우 처리 강화
+            if (response.data.status.toUpperCase() === "SUCCESS" || response.data.code === "200") {
                 setIsCodeSent(true);
                 setTimer(180);
                 alert("인증번호가 발송되었습니다.");
             } else {
-                alert(response.data.message || "인증번호 발송에 실패했습니다.");
+                // 서버에서 내려주는 구체적인 에러 메시지(C999 등) 표시
+                alert(`[${response.data.code}] ${response.data.message}`);
             }
         } catch (error) {
-            // 500 에러 등의 상세 내용을 확인하기 위한 처리
-            const serverMessage = error.response?.data?.message;
-            alert(serverMessage || "이메일 전송 중 서버 오류가 발생했습니다.");
-            console.error("서버 에러 상세:", error.response?.data);
+            // [C999 에러 대응] 서버 에러 응답 객체에서 메시지 추출
+            const errorData = error.response?.data;
+            const errorMessage = errorData?.message || "이메일 전송 중 서버 오류가 발생했습니다.";
+            const errorCode = errorData?.code ? `(${errorData.code})` : "";
+
+            alert(`${errorMessage} ${errorCode}`);
+            console.error("인증번호 발송 에러 상세:", errorData);
         }
     };
 
@@ -92,14 +92,15 @@ const SignUp = () => {
                 code: data.authCode
             });
 
-            // verified 결과 확인 (image_51cbd5.png 스키마 참조)
-            if (!verifyRes.data.data?.verified) {
-                alert(verifyRes.data.data?.message || "인증번호가 올바르지 않습니다.");
+            const verifyResult = verifyRes.data.data; // data 필드에 접근
+
+            if (verifyRes.data.status?.toUpperCase() !== "SUCCESS" || !verifyResult?.verified) {
+                // 서버가 보내준 구체적인 인증 실패 사유 출력
+                alert(verifyResult?.message || verifyRes.data.message || "인증번호가 올바르지 않습니다.");
                 return;
             }
 
             // 2. 실제 회원가입 요청 (/user/sign-up)
-            // 명세서 규격: SignUpRequest { email, password }
             const signUpRes = await axios.post('/user/sign-up', {
                 email: data.email,
                 password: data.password
@@ -118,9 +119,13 @@ const SignUp = () => {
                 navigate('/main');
             }
         } catch (error) {
-            // 403 Forbidden 혹은 400 Bad Request 상세 메시지 처리
-            const errorMsg = error.response?.data?.message || "회원가입 처리 중 에러가 발생했습니다.";
-            alert(errorMsg);
+            // 400 Bad Request 발생 시 서버의 에러 응답 파싱
+            const serverError = error.response?.data;
+            const errorMsg = serverError?.message || "요청 형식이 잘못되었거나 인증에 실패했습니다.";
+            const errorCode = serverError?.code ? `[${serverError.code}] ` : "";
+            
+            alert(`${errorCode}${errorMsg}`);
+            console.error("인증/가입 실패 상세:", serverError);
         }
     };
 

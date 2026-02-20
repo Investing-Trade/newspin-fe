@@ -11,82 +11,135 @@ import refresh from '../assets/re.png';
 import correction from '../assets/correction-tape.png';
 import axios from 'axios';
 
-axios.defaults.baseURL = 'http://52.78.151.56:8080';
-
 const News = () => {
     const navigate = useNavigate();
-    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-    // --- API 연동을 위한 상태(State) 추가 ---
-    const [newsData, setNewsData] = useState(null); // 뉴스 데이터 저장
-    const [userComment, setUserComment] = useState(""); // 사용자의 판단 근거
-    const [selectedSentiment, setSelectedSentiment] = useState(null); // 호재/악재 선택
-    const [aiResult, setAiResult] = useState(null); // AI 분석 결과 저장
+    const API_BASE_URL = 'http://52.78.151.56:8080';
+    const token = localStorage.getItem('accessToken');
+
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [newsData, setNewsData] = useState(null);
+    const [userComment, setUserComment] = useState("");
+    const [selectedSentiment, setSelectedSentiment] = useState(null);
+    const [aiResult, setAiResult] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    // 1. 랜덤 뉴스 불러오기 함수 (GET /news/random)
-    const fetchRandomNews = async () => {
-    setLoading(true);
-    try {
-        // [수정] localStorage에서 저장된 토큰을 가져와 헤더에 넣습니다.
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.get('/news/random', {
-            headers: {
-                Authorization: `Bearer ${token}` // [중요] 403 에러 방지용 인증 헤더
+    const [userInfo, setUserInfo] = useState({
+        email: "",
+        password: "********"
+    });
+
+    // 1. 내 정보 불러오기 (GET /user/me)
+    const fetchUserInfo = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/user/me`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (response.data.status === "SUCCESS") {
+                setUserInfo(prev => ({ ...prev, email: response.data.data.email }));
             }
-        });
-
-        if (response.data.status === "SUCCESS") {
-            setNewsData(response.data.data);
-            setAiResult(null); 
-            setUserComment(""); 
-            setSelectedSentiment(null);
+        } catch (error) {
+            console.error("사용자 정보 로드 실패:", error);
         }
-    } catch (error) {
-        console.error("뉴스 로딩 실패:", error);
-        // 에러 상세 내용을 alert에 띄워 백엔드 개발자와 소통하기 좋습니다.
-        alert(`뉴스를 불러오는 중 오류가 발생했습니다: ${error.response?.status || error.message}`);
-    } finally {
-        setLoading(false);
-    }
-};
+    };
 
-    // [수정] 페이지 진입 시 뉴스를 자동으로 가져오도록 호출 추가
+    // 2. 랜덤 뉴스 불러오기 (GET /news/random)
+    const fetchRandomNews = async () => {
+        setLoading(true);
+        try {
+            const response = await axios.get(`${API_BASE_URL}/news/random`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (response.data.status === "SUCCESS") {
+                setNewsData(response.data.data);
+                setAiResult(null);
+                setUserComment("");
+                setSelectedSentiment(null);
+            }
+        } catch (error) {
+            console.error("뉴스 로딩 에러:", error.response?.data || error.message);
+            if (error.response?.status === 401) {
+                alert("세션이 만료되었습니다. 다시 로그인해주세요.");
+                navigate('/login');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 3. 의견 제출 및 AI 분석 (형식 일치화 작업)
+    const handleSubmitOpinion = async () => {
+        // newsData가 유효한지, newsId가 존재하는지 먼저 확인
+        if (!newsData || !newsData.newsId) {
+            alert("뉴스 데이터가 올바르지 않습니다.");
+            return;
+        }
+
+        if (!selectedSentiment || !userComment) {
+            alert("판단 결과와 근거 코멘트를 모두 입력해주세요.");
+            return;
+        }
+
+        // 서버 ENUM 형식에 맞춘 대문자 고정
+        const sentimentValue = selectedSentiment === "호재" ? "POSITIVE" : "NEGATIVE";
+
+        // AIAnalysisRequest 형식에 맞춘 객체 생성
+        const requestData = {
+            sentiment: sentimentValue, // 필수 필드 1
+            reason: userComment.trim() // 필수 필드 2 (공백 제거)
+        };
+
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/news/${newsData.newsId}/analyze`,
+                requestData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json' // 500 에러 방지를 위해 명시
+                    }
+                }
+            );
+
+            if (response.data.status === "SUCCESS") {
+                setAiResult(response.data.data);
+            }
+        } catch (error) {
+            // 서버가 왜 화가 났는지(500) 상세 이유를 확인하기 위한 로그
+            console.error("전송 데이터:", requestData);
+            console.error("에러 응답:", error.response?.data);
+            alert(`의견 제출 실패: ${error.response?.data?.message || "형식 오류가 발생했습니다."}`);
+        }
+    };
+
+    // 4. 로그아웃 (POST /user/logout)
+    const handleLogout = async () => {
+        try {
+            await axios.post(`${API_BASE_URL}/user/logout`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            console.error("서버 로그아웃 처리 실패:", error);
+        } finally {
+            localStorage.clear();
+            navigate('/login');
+        }
+    };
+
     useEffect(() => {
         document.title = "NewsPin - News";
-        fetchRandomNews(); 
-    }, []);
-
-    // 2. 의견 제출 함수 (POST /news/{newsId}/analyze)
-    const handleSubmitOpinion = async () => {
-    if (!selectedSentiment || !userComment) {
-        alert("호재/악재 선택과 코멘트를 모두 입력해주세요.");
-        return;
-    }
-
-    try {
-        const token = localStorage.getItem('accessToken');
-        const response = await axios.post(`/news/${newsData.newsId}/analyze`, {
-            sentiment: selectedSentiment, // 백엔드 명세서에 따라 POSITIVE/NEGATIVE로 보낼지 확인 필요
-            reason: userComment
-        }, {
-            headers: {
-                Authorization: `Bearer ${token}` // [중요] 제출 권한 인증
-            }
-        });
-
-        if (response.data.status === "SUCCESS") {
-            setAiResult(response.data.data); 
+        if (!token || token === "undefined" || token === "null") {
+            alert("로그인이 필요합니다.");
+            navigate('/login');
+            return;
         }
-    } catch (error) {
-        console.error("의견 제출 실패:", error);
-        alert("분석 제출 중 오류가 발생했습니다.");
-    }
-};
+        fetchUserInfo();
+        fetchRandomNews();
+    }, []);
 
     return (
         <div className="w-full h-screen bg-blue-700 flex flex-col items-center md:p-2 font-agbalumo overflow-hidden">
-
             {/* [상단 헤더 영역] */}
             <div className="w-full max-w-4xl flex justify-between items-start mb-6 shrink-0">
                 <div className="flex items-center gap-4">
@@ -110,21 +163,24 @@ const News = () => {
             </div>
 
             <div className="w-full max-w-6xl bg-white rounded-xl shadow-2xl p-6 flex flex-col gap-4 border-4 border-gray-400 flex-1 overflow-hidden">
-
-                {/* 1. 뉴스 상단부: API 데이터 연동 */}
+                {/* 1. 뉴스 상단부 */}
                 <div className="flex flex-col border-2 rounded-lg border-black p-1 md:flex-row pb-1 gap-2 h-[50%] shrink-2">
                     <div className="w-full md:w-1/3 border-2 border-gray-300 rounded-lg flex items-center justify-center p-4 h-full bg-gray-50">
                         <div className="text-3xl font-bold flex items-center gap-2">
-                            <span className="text-green-700 uppercase font-jua">NEWS SOURCE</span>
+                            <span className="text-green-700 uppercase font-jua">
+                                {loading ? "LOADING..." : "NEWS SOURCE"}
+                            </span>
                         </div>
                     </div>
                     <div className="w-full md:w-9/10 flex flex-col h-full">
                         <h2 className="text-xl font-bold mb-2 truncate font-jua">
-                            {loading ? "로딩 중..." : newsData?.title}
+                            {loading ? "뉴스를 가져오는 중입니다..." : newsData?.title || "뉴스가 없습니다."}
                         </h2>
                         <hr />
                         <div className="text-[15px] leading-relaxed text-gray-800 overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-300 flex-1 font-jua mt-2">
-                            <p className="whitespace-pre-wrap">{newsData?.content}</p>
+                            <p className="whitespace-pre-wrap">
+                                {loading ? "" : newsData?.content || "본문 내용을 불러올 수 없습니다."}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -164,7 +220,7 @@ const News = () => {
                         <div>
                             <button
                                 onClick={handleSubmitOpinion}
-                                className="w-full active:scale-[0.98] transition-all rounded-lg bg-blue-600 text-white rounded-lg p-1 font-bold flex items-center justify-center shadow-md cursor-pointer hover:bg-cyan-400 shrink-0 font-jua"
+                                className="w-full active:scale-[0.98] transition-all rounded-lg bg-blue-600 text-white p-1 font-bold flex items-center justify-center shadow-md cursor-pointer hover:bg-cyan-400 shrink-0 font-jua"
                             >
                                 <img src={submit} alt="submit" className="w-6 mr-2" />
                                 <p className='font-semibold'>의견 제출</p>
@@ -194,7 +250,6 @@ const News = () => {
                                             </span></li>
                                         </ul>
                                     </div>
-
                                     <div>
                                         <p className="font-bold text-blue-800">AI 피드백:</p>
                                         <p className="text-gray-800 text-[13.5px] whitespace-pre-wrap">
@@ -204,19 +259,18 @@ const News = () => {
                                 </>
                             )}
                         </div>
-
-                        {/* [수정] 재학습 버튼에 fetchRandomNews 함수를 연결함 */}
+                        B
                         <div className="flex gap-20 mt-1 w-[50%] ml-60 items-center justify-center">
-                            <button 
+                            <button
                                 onClick={fetchRandomNews}
-                                className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-blue-600 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-cyan-500"
+                                className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-cyan-500"
                             >
-                                <img src={refresh} alt="like" className="w-8" />
-                                <span>재학습</span>
+                                <img src={refresh} alt="refresh" className="w-8" />
+                                <span>다음 뉴스</span>
                             </button>
 
-                            <button onClick={() => navigate('/invest')} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
-                                <img src={logout} alt="dislike" className="w-8" />
+                            <button onClick={() => navigate('/main')} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
+                                <img src={logout} alt="exit" className="w-8" />
                                 <span >학습종료</span>
                             </button>
                         </div>
@@ -226,13 +280,12 @@ const News = () => {
                     <div className="fixed inset-0 bg-white/60 flex justify-center items-center z-50">
                         <div className="bg-white rounded-3xl p-10 w-[500px] shadow-2xl flex flex-col font-jua">
                             <h2 className="text-5xl text-center mb-8">내 정보</h2>
-
                             <div className="space-y-6 mb-8 text-2xl">
                                 <div>
-                                    <label className="block mb-2">아이디</label>
+                                    <label className="block mb-2">이메일(아이디)</label>
                                     <input
                                         type="text"
-                                        value="investingTrade"
+                                        value={userInfo.email}
                                         readOnly
                                         className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
                                     />
@@ -241,33 +294,19 @@ const News = () => {
                                     <label className="block mb-2">비밀번호</label>
                                     <input
                                         type="password"
-                                        value="password123" 
-                                        readOnly
-                                        className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block mb-2">이메일</label>
-                                    <input
-                                        type="email"
-                                        value="newsanalyst35144@gmail.com" 
+                                        value={userInfo.password}
                                         readOnly
                                         className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
                                     />
                                 </div>
                             </div>
-
                             <hr className="border-gray-300 mb-8" />
-
                             <div className="flex gap-4 space-x-6">
-                                <button className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white text-2xl cursor-pointer py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700">
+                                <button className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-xl border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
                                     <img src={correction} alt="correct" className='w-12' />
                                     <span>수정하기</span>
                                 </button>
-                                <button
-                                    onClick={() => setIsProfileModalOpen(false)}
-                                    className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700"
-                                >
+                                <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-xl border-solid border-white py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
                                     <img src={logout} alt="logout" className='w-12' />
                                     <span>메인 페이지로</span>
                                 </button>
@@ -275,7 +314,6 @@ const News = () => {
                         </div>
                     </div>
                 )}
-
             </div>
         </div>
     );

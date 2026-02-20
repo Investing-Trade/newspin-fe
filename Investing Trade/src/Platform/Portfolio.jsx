@@ -194,7 +194,7 @@ const Portfolio = () => {
                                     <img src={setting} alt="stock" className='w-10 h-10' />
                                     <span className="text-xl font-jua">모의 투자로 이동</span>
                                 </button>
-                                <button onClick={() => navigate('/invest')} className="flex space-x-2 p-2 bg-blue-600 cursor-pointer hover:bg-cyan-700 border-2 border-gray-400 text-white rounded-lg items-center justify-center transition-all active:scale-95 shadow-lg">
+                                <button onClick={() => navigate('/main')} className="flex space-x-2 p-2 bg-blue-600 cursor-pointer hover:bg-cyan-700 border-2 border-gray-400 text-white rounded-lg items-center justify-center transition-all active:scale-95 shadow-lg">
                                     <img src={stocks} alt="stock" className='w-10 h-10' />
                                     <span className="text-xl font-jua">메인으로 이동</span>
                                 </button>
