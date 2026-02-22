@@ -28,7 +28,7 @@ const SignUp = () => {
         return () => clearInterval(interval);
     }, [isCodeSent, timer]);
 
-    // 인증번호 발송 함수: /user/email/send-verification 연동
+    // 인증번호 발송 함수: /user/email/send-verification
     const handleSendCode = async () => {
         const vEmail = watch("verificationEmail");
         if (!vEmail || errors.verificationEmail) {
@@ -37,11 +37,10 @@ const SignUp = () => {
         }
 
         try {
-            const response = await axios.post('/user/email/send-verification', null, {
-                params: { email: vEmail }
+            const response = await axios.post('/user/email/send-verification', {
+                email: vEmail
             });
 
-            // 수정: status가 "SUCCESS"가 아닐 경우 처리 강화
             if (response.data.status.toUpperCase() === "SUCCESS" || response.data.code === "200") {
                 setIsCodeSent(true);
                 setTimer(180);
@@ -56,8 +55,7 @@ const SignUp = () => {
             const errorMessage = errorData?.message || "이메일 전송 중 서버 오류가 발생했습니다.";
             const errorCode = errorData?.code ? `(${errorData.code})` : "";
 
-            alert(`${errorMessage} ${errorCode}`);
-            console.error("인증번호 발송 에러 상세:", errorData);
+            alert(`${errorData?.message || "서버 오류"} (${errorData?.code || "C999"})`); console.error("인증번호 발송 에러 상세:", errorData);
         }
     };
 
@@ -85,8 +83,6 @@ const SignUp = () => {
     // [수정] 제출 핸들러: 인증 확인 후 회원가입 및 데이터 매핑 최적화
     const onSubmit = async (data) => {
         try {
-            // 1. 인증 확인 (/user/email/verify)
-            // 명세서 규격: EmailVerificationRequest { email, code }
             const verifyRes = await axios.post('/user/email/verify', {
                 email: data.verificationEmail,
                 code: data.authCode
@@ -95,7 +91,6 @@ const SignUp = () => {
             const verifyResult = verifyRes.data.data; // data 필드에 접근
 
             if (verifyRes.data.status?.toUpperCase() !== "SUCCESS" || !verifyResult?.verified) {
-                // 서버가 보내준 구체적인 인증 실패 사유 출력
                 alert(verifyResult?.message || verifyRes.data.message || "인증번호가 올바르지 않습니다.");
                 return;
             }
@@ -119,13 +114,8 @@ const SignUp = () => {
                 navigate('/main');
             }
         } catch (error) {
-            // 400 Bad Request 발생 시 서버의 에러 응답 파싱
             const serverError = error.response?.data;
-            const errorMsg = serverError?.message || "요청 형식이 잘못되었거나 인증에 실패했습니다.";
-            const errorCode = serverError?.code ? `[${serverError.code}] ` : "";
-            
-            alert(`${errorCode}${errorMsg}`);
-            console.error("인증/가입 실패 상세:", serverError);
+            alert(`[${serverError?.code || 'Error'}] ${serverError?.message || "오류가 발생했습니다."}`);
         }
     };
 
@@ -248,7 +238,7 @@ const SignUp = () => {
                                     {isCodeSent ? "재전송" : "인증번호 전송"}
                                 </button>
                             </div>
-                            {errors.verficationEmail && <p className="text-red-500 text-xs font-bold">{errors.email.message}</p>}
+                            {errors.verificationEmail && <p className="text-red-500 text-xs font-bold">{errors.email.message}</p>}
                         </div>
 
                         {/* 인증번호 입력 섹션 (인증번호 전송 시에만 표시) */}
