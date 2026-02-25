@@ -3,7 +3,7 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import logout from '../assets/logout-1.png';
+import logout from '../assets/logout.png';
 import correction from '../assets/correction-tape.png';
 import dashboard from '../assets/dashboard.png';
 import bio from '../assets/bio-gas.png';

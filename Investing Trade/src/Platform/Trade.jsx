@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import like from '../assets/thumb-up.png';
 import dislike from '../assets/dislike.png';
 import submit from '../assets/submit.png';
-import logout from '../assets/logout-1.png';
+import logout from '../assets/logout.png';
 import refresh from '../assets/re.png';
 import correction from '../assets/correction-tape.png';
 import trade from '../assets/trade.png';
