@@ -26,22 +26,17 @@ const Login = () => {
     mode: "onChange"
   });
 
-  // [연동 수정] API 명세서 구조 반영
- const onSubmit = async (data) => {
+  const onSubmit = async (data) => {
     try {
-      // 1. 요청 데이터 로그 확인 (스웨거의 데이터 형식과 일치하는지 확인용)
-      console.log("전송 데이터:", { email: data.email, password: data.password });
+      console.log("로그인 요청 데이터:", { email: data.email, password: data.password });
 
-      const response = await axios({
-        method: 'post',
-        url: `${API_BASE_URL}/user/sign-in`, // 주소 확인: http://52.78.151.56:8080/user/sign-in
+      const response = await axios.post(`${API_BASE_URL}/user/sign-in`, {
+        email: data.email,
+        password: data.password
+      }, {
         headers: {
           'Content-Type': 'application/json',
           'Accept': '*/*'
-        },
-        data: {
-          email: data.email,
-          password: data.password
         }
       });
 
@@ -75,39 +70,7 @@ const Login = () => {
 
   const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
 
-const handleSendCode = async () => {
-  const emailValue = getValues("email");
-  if (!emailValue) {
-    alert("이메일을 입력해주세요.");
-    return;
-  }
-
-  try {
-    // 1. 요청 직전 데이터 로그 확인
-    console.log("인증번호 발송 요청 이메일:", emailValue);
-
-    const response = await axios.post('http://52.78.151.56:8080/user/email/send-verification', 
-      null, // Body가 비어있고 쿼리 파라미터로 보내는 경우일 수도 있으니 명세서 재확인 필요
-      {
-        params: { email: emailValue } // 만약 쿼리 파라미터 방식이라면 이렇게 변경
-      }
-    );
-
-    // 만약 Body에 담아 보내는 방식이라면:
-    // const response = await axios.post('http://52.78.151.56:8080/user/email/send-verification', {
-    //   email: emailValue
-    // });
-
-    if (response.data.status === "SUCCESS") {
-      alert("인증번호가 발송되었습니다.");
-    }
-  } catch (error) {
-    console.error("인증번호 발송 에러 상세:", error.response?.data);
-    alert(error.response?.data?.message || "인증번호 발송 중 서버 오류가 발생했습니다.");
-  }
-};
-
-  // 실시간 테두리 스타일 결정 함수
+// 실시간 테두리 스타일 결정 함수
   const getBorderStyle = (fieldName) => {
     if (errors[fieldName]) return 'border-red-500 bg-red-50 focus:ring-red-500';
     if (dirtyFields[fieldName]) return 'border-[#5D6DED] bg-blue-50 focus:ring-[#5D6DED]';
