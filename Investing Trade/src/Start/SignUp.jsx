@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// 백엔드 서버 주소
-axios.defaults.baseURL = 'http://52.78.151.56:8080';
+// 백엔드 서버 주소 설정
+const API_BASE_URL = 'http://52.78.151.56:8080';
+axios.defaults.baseURL = API_BASE_URL;
 
 const SignUp = () => {
     const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
@@ -30,9 +31,9 @@ const SignUp = () => {
 
     // 인증번호 발송 함수: /user/email/send-verification
     const handleSendCode = async () => {
-        const vEmail = watch("verificationEmail");
-        if (!vEmail || errors.verificationEmail) {
-            alert("인증번호를 받을 이메일을 입력해주세요.");
+        const isEmailValid = await trigger("verificationEmail");
+        if (!isEmailValid) {
+            alert("인증번호를 받을 이메일을 올바르게 입력해주세요.");
             return;
         }
 
@@ -75,10 +76,14 @@ const SignUp = () => {
         register,
         handleSubmit,
         watch,
+        trigger,
         formState: { errors, dirtyFields },
     } = useForm({
         mode: "onChange"
     });
+
+    const passwordValue = watch("password");
+    const vEmail = watch("verificationEmail");
 
     // [수정] 제출 핸들러: 인증 확인 후 회원가입 및 데이터 매핑 최적화
     const onSubmit = async (data) => {
@@ -121,10 +126,7 @@ const SignUp = () => {
 
     // 정규식 설정
     const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.com$/;
-
-    // 비밀번호 확인을 위한 값 감시
-    const passwordValue = watch("password");
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
     // 실시간 테두리 색상 제어 함수
     const getBorderStyle = (fieldName) => {
