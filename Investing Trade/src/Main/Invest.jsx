@@ -235,10 +235,8 @@ const Invest = () => {
                                         type={showPassword ? "text" : "password"}
 
                                         // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
-                                        value={isEditing
-                                            ? editData.password
-                                            : (showPassword ? userInfo.password : "********")
-                                        }
+                                        value={isEditing ? editData.password
+                                            : userInfo.password}
                                         
                                         onChange={(e) => setEditData({ ...editData, password: e.target.value })}
                                         readOnly={!isEditing}
