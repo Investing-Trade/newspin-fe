@@ -76,10 +76,14 @@ const News = () => {
         setLoading(true);
         try {
             const response = await axios.get(`${API_BASE_URL}/news/random`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Accept': 'application/json' // 명세에 맞춰 JSON 수락 헤더 추가
+                }
             });
-            if (response.data.status.toLowerCase() === "success") {
-                setNewsData(response.data.data);
+            if (response.data.status.toLowerCase() === "success" || response.status === 200) {
+                const fetchedData = response.data.data || response.data;
+                setNewsData(fetchedData);
 
                 // 새 뉴스를 가져올 때 이전 분석 결과 초기화
                 setAiResult(null);
@@ -88,7 +92,10 @@ const News = () => {
             }
         } catch (error) {
             console.error("뉴스 로딩 에러:", error);
-            alert("뉴스를 불러오는 데 실패했습니다.");
+            // 404 에러 발생 시 콘솔에 상세 config를 출력하여 경로를 확인합니다.
+            if (error.response?.status === 404) {
+                console.log("URL 경로를 확인하세요:", error.config.url);
+            }
         } finally {
             setLoading(false);
         }
@@ -98,7 +105,7 @@ const News = () => {
     const handleSubmitOpinion = async () => {
         if (!newsData?.newsId) return;
         if (!selectedSentiment || !userComment.trim()) {
-            alert("호재 or 악재 선택과 판단 근거를 모두 입력해주세요.");
+            alert("판단 결과(호재/악재)와 근거를 모두 입력해주세요.");
             return;
         }
 
@@ -113,7 +120,8 @@ const News = () => {
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': '*/*'
                     }
                 }
             );
@@ -122,6 +130,7 @@ const News = () => {
                 setAiResult(response.data.data);
             }
         } catch (error) {
+            console.error("분석 에러 상세:", error.response?.data);
             alert(error.response?.data?.message || "분석 요청에 실패했습니다.");
         }
     };
@@ -209,7 +218,7 @@ const News = () => {
                         <div className="flex gap-2 w-full items-center justify-center font-jua">
                             <button
                                 onClick={() => setSelectedSentiment("POSITIVE")}
-                                className={`flex-1 flex items-center justify-center gap-2 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer ${selectedSentiment === "호재" ? "bg-blue-800 scale-105 ring-2 ring-blue-300" : "bg-blue-600 hover:bg-cyan-400"}`}
+                                className={`flex-1 flex items-center justify-center gap-2 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer ${selectedSentiment === "POSITIVE" ? "bg-blue-800 scale-105 ring-2 ring-blue-300" : "bg-blue-600 hover:bg-cyan-400"}`}
                             >
                                 <img src={like} alt="like" className="w-8" />
                                 <span>호재</span>
@@ -217,7 +226,7 @@ const News = () => {
 
                             <button
                                 onClick={() => setSelectedSentiment("NEGATIVE")}
-                                className={`flex-1 flex items-center justify-center gap-2 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer ${selectedSentiment === "악재" ? "bg-red-800 scale-105 ring-2 ring-red-300" : "bg-red-500 hover:bg-rose-700"}`}
+                                className={`flex-1 flex items-center justify-center gap-2 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer ${selectedSentiment === "NEGATIVE" ? "bg-red-800 scale-105 ring-2 ring-red-300" : "bg-red-500 hover:bg-rose-700"}`}
                             >
                                 <img src={dislike} alt="dislike" className="w-8" />
                                 <span>악재</span>
@@ -310,38 +319,85 @@ const News = () => {
 
                 {/* [내 정보 모달] - API 및 가시화 로직 연동 */}
 
+                {/* [내 정보 모달] - API 연동 반영 */}
                 {isProfileModalOpen && (
                     <div className="fixed inset-0 bg-white/60 flex justify-center items-center z-50">
                         <div className="bg-white rounded-3xl p-10 w-[500px] shadow-2xl flex flex-col font-jua">
                             <h2 className="text-5xl text-center mb-8">내 정보</h2>
+
                             <div className="space-y-6 mb-8 text-2xl">
+                                {/* 아이디 필드 */}
                                 <div>
-                                    <label className="block mb-2">이메일(아이디)</label>
+                                    <label className="block mb-2">아이디</label>
                                     <input
                                         type="text"
-                                        value={userInfo.email}
-                                        readOnly
-                                        className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
+                                        value={isEditing ? editData.userId : userInfo.userId}
+                                        onChange={(e) => setEditData({ ...editData, userId: e.target.value })}
+                                        readOnly={!isEditing}
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
                                     />
                                 </div>
+
+                                {/* 이메일 필드 */}
                                 <div>
-                                    <label className="block mb-2">비밀번호</label>
+                                    <label className="block mb-2">이메일</label>
                                     <input
-                                        type="password"
-                                        value={userInfo.password}
-                                        readOnly
-                                        className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold"
+                                        type="email"
+                                        value={isEditing ? editData.email : userInfo.email}
+                                        onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                                        readOnly={!isEditing}
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
                                     />
                                 </div>
+
+                                {/* 비밀번호 필드: lucide icon 토글 적용 */}
+                                <div>
+                                    <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+
+                                            // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
+                                            value={isEditing ? editData.password
+                                                : userInfo.password}
+
+                                            onChange={(e) => setEditData({ ...editData, password: e.target.value })}
+                                            readOnly={!isEditing}
+                                            placeholder={isEditing ? "새 비밀번호 입력" : ""}
+                                            className={`w-full border-2 border-black rounded-xl p-3 font-jua pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
+                                        />
+                                        {/* 수정 중이 아닐 때도 비밀번호를 볼 수 있도록 버튼 상시 활성화 */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
+                                        >
+                                            {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
+                                        </button>
+                                    </div>
+                                </div>
+
                             </div>
+
                             <hr className="border-gray-300 mb-8" />
+
                             <div className="flex gap-4 space-x-6">
-                                <button className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-xl border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
-                                    <img src={correction} alt="correct" className='w-12' />
-                                    <span>수정하기</span>
-                                </button>
-                                <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-xl border-solid border-white py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
-                                    <img src={logout} alt="logout" className='w-12' />
+                                {isEditing ? (
+                                    <button onClick={handleUpdateInfo} className="flex-1 bg-sky-500 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-sky-600">
+                                        <img src={save} alt="save" className='w-12' />
+                                        <span>저장하기</span>
+                                    </button>
+                                ) : (
+                                    <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
+                                        <img src={correction} alt="correct" className='w-12' />
+                                        <span>수정하기</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => { setIsProfileModalOpen(false); setIsEditing(false); setShowPassword(false); }}
+                                    className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
+                                >
+                                    <img src={logout} alt="logout" className='w-13' />
                                     <span>메인 페이지로</span>
                                 </button>
                             </div>
