@@ -209,34 +209,86 @@ const Portfolio = () => {
                 </div>
             </div>
 
-            {/* 내 정보 모달 UI 유지 */}
+             {/* [내 정보 모달] - API 연동 반영 */}
             {isProfileModalOpen && (
                 <div className="fixed inset-0 bg-white/60 flex justify-center items-center z-50">
                     <div className="bg-white rounded-3xl p-10 w-[500px] shadow-2xl flex flex-col font-jua">
                         <h2 className="text-5xl text-center mb-8">내 정보</h2>
+
                         <div className="space-y-6 mb-8 text-2xl">
+                            {/* 아이디 필드 */}
                             <div>
                                 <label className="block mb-2">아이디</label>
-                                <input type="text" value="investingTrade" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
+                                <input
+                                    type="text"
+                                    value={isEditing ? editData.userId : userInfo.userId}
+                                    onChange={(e) => setEditData({ ...editData, userId: e.target.value })}
+                                    readOnly={!isEditing}
+                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                />
                             </div>
-                            <div>
-                                <label className="block mb-2">비밀번호</label>
-                                <input type="password" value="password123" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
-                            </div>
+
+                            {/* 이메일 필드 */}
                             <div>
                                 <label className="block mb-2">이메일</label>
-                                <input type="email" value="newsanalyst35144@gmail.com" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
+                                <input
+                                    type="email"
+                                    value={isEditing ? editData.email : userInfo.email}
+                                    onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                                    readOnly={!isEditing}
+                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                />
                             </div>
+
+                            {/* 비밀번호 필드: lucide icon 토글 적용 */}
+                            <div>
+                                <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
+                                <div className="relative">
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+
+                                        // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
+                                        value={isEditing ? editData.password
+                                            : userInfo.password}
+                                        
+                                        onChange={(e) => setEditData({ ...editData, password: e.target.value })}
+                                        readOnly={!isEditing}
+                                        placeholder={isEditing ? "새 비밀번호 입력" : ""}
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
+                                    />
+                                    {/* 수정 중이 아닐 때도 비밀번호를 볼 수 있도록 버튼 상시 활성화 */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
+                                    </button>
+                                </div>
+                            </div>
+
                         </div>
+
                         <hr className="border-gray-300 mb-8" />
+
                         <div className="flex gap-4 space-x-6">
-                            <button className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white text-2xl cursor-pointer py-2 rounded-xl flex items-center justify-center gap-2 hover:indigo-700">
-                                <img src={correction} alt="correct" className='w-12' />
-                                <span>수정하기</span>
-                            </button>
-                            <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white py-2 rounded-xl flex items-center justify-center gap-2 hover:indigo-700">
-                                <img src={logout} alt="logout" className='w-12' />
-                                <span>닫기</span>
+                            {isEditing ? (
+                                <button onClick={handleUpdateInfo} className="flex-1 bg-sky-500 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-sky-600">
+                                    <img src={save} alt="save" className='w-12' />
+                                    <span>저장하기</span>
+                                </button>
+                            ) : (
+                                <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
+                                    <img src={correction} alt="correct" className='w-12' />
+                                    <span>수정하기</span>
+                                </button>
+                            )}
+                            <button
+                                onClick={() => { setIsProfileModalOpen(false); setIsEditing(false); setShowPassword(false); }}
+                                className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
+                            >
+                                <img src={logout} alt="logout" className='w-13' />
+                                <span>메인 페이지로</span>
                             </button>
                         </div>
                     </div>
