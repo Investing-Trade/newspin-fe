@@ -3,15 +3,11 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import dislike from '../assets/dislike.png';
-import submit from '../assets/submit.png';
 import logout from '../assets/logout.png';
-import refresh from '../assets/re.png';
 import correction from '../assets/correction-tape.png';
 import trade from '../assets/trade.png';
 import trading from '../assets/trading.png';
 import selling from '../assets/selling.png';
-import write from '../assets/write-review.png';
 import it from '../assets/it.png';
 import enter from '../assets/popcorn.png';
 import cutlery from '../assets/cutlery.png';
@@ -27,16 +23,71 @@ import axios from 'axios';
 import save from '../assets/save.png';
 import { Eye, EyeOff } from 'lucide-react';
 
-axios.defaults.baseURL = "http://52.78.151.56:8080";
+const api = axios.create({
+    baseURL: "http://52.78.151.56:8080",
+    // 서버가 쿠키 인증이면 true로 바꾸세요 (지금은 Bearer 쓰는 걸로 보이니 false 유지)
+    withCredentials: false,
+});
 
-axios.interceptors.request.use((config) => {
-    const token = localStorage.getItem("accessToken");
+const getAccessToken = () => {
+    const raw = localStorage.getItem("accessToken");
+    if (!raw) return null;
+
+    const normalize = (t) => {
+        if (!t) return null;
+        const s = String(t).trim();
+        // 이미 "Bearer xxx"로 저장된 경우 중복 방지
+        return s.toLowerCase().startsWith("bearer ") ? s.slice(7).trim() : s;
+    };
+
+    try {
+        // JSON 문자열/객체로 저장된 경우들 처리
+        if (raw.startsWith('"') || raw.startsWith("{") || raw.startsWith("[")) {
+            const parsed = JSON.parse(raw);
+
+            if (typeof parsed === "string") return normalize(parsed);
+
+            // 가능한 키들 다 방어
+            return normalize(
+                parsed?.accessToken ??
+                parsed?.access_token ??
+                parsed?.token ??
+                parsed?.data?.accessToken ??
+                parsed?.data?.token
+            );
+        }
+        return normalize(raw);
+    } catch {
+        return normalize(raw);
+    }
+};
+api.interceptors.request.use((config) => {
+    const token = getAccessToken();
     if (token) {
-        config.headers = config.headers || {};
-        config.headers.Authorization = `Bearer ${token}`;
+        // axios v1: headers가 AxiosHeaders일 수 있음
+        if (config.headers?.set) {
+            config.headers.set("Authorization", `Bearer ${token}`);
+        } else {
+            config.headers = { ...(config.headers || {}), Authorization: `Bearer ${token}` };
+        }
     }
     return config;
 });
+
+// ✅ 403/401이면 토큰 제거 후 로그인으로 보내기(세션 API 포함 전부에 적용)
+api.interceptors.response.use(
+    (res) => res,
+    (error) => {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("simulationSessionId");
+            alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
+            window.location.href = "/login";
+        }
+        return Promise.reject(error);
+    }
+);
 
 const Trade = () => {
     const navigate = useNavigate();
@@ -46,9 +97,11 @@ const Trade = () => {
     const [showPassword, setShowPassword] = useState(false);
 
     // API 데이터 상태
-    const [session, setSession] = useState(null); // 현재 시뮬레이션 세션 정보
+    const [sessions, setSessions] = useState([]); // 내 시뮬레이션 세션 목록
+    const [session, setSession] = useState(null); // 현재 사용 중인 세션
     const [dayData, setDayData] = useState(null); // 현재 날짜의 뉴스 및 자산 정보
     const [portfolio, setPortfolio] = useState(null); // setPortfolio 상태 추가
+
     const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
     const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
 
@@ -64,21 +117,19 @@ const Trade = () => {
         tradeType: 'BUY'
     });
 
-    // 2. 투자 시작 - 세션 생성 (POST /simulation/sessions)
+    // 1) 투자 시작 - 세션 생성 (POST /simulation/sessions)
     const handleStartSimulation = async () => {
-        // 1. 유효성 검사: 금액 제한 (이미지 명세에 따라 최소 100만 원, 사용자 요청에 따라 최대 1000만 원)
         if (config.initialCapital < 1000000 || config.initialCapital > 10000000) {
             alert("투자 금액은 100만 원에서 1,000만 원 사이여야 합니다.");
             return;
         }
-
-        // 2. 날짜 유효성 검사
         if (new Date(config.startDate) >= new Date(config.endDate)) {
             alert("종료 날짜는 시작 날짜보다 이후여야 합니다.");
             return;
         }
+
         try {
-            const response = await axios.post('/simulation/sessions', {
+            const response = await api.post('/simulation/sessions', {
                 initialCapital: config.initialCapital,
                 startDate: config.startDate,
                 endDate: config.endDate
@@ -87,12 +138,18 @@ const Trade = () => {
             if (response.data.status === "SUCCESS") {
                 const sessionData = response.data.data;
                 setSession(sessionData);
+                localStorage.setItem("simulationSessionId", String(sessionData.sessionId));
+
+                // 첫날 데이터 자동 로딩
+                await Promise.all([
+                    fetchDayData(sessionData.sessionId),
+                    fetchPortfolio(sessionData.sessionId),
+                ]);
+
+                // 목록도 갱신
+                await fetchSessions();
+
                 alert("투자 세션이 시작되었습니다.");
-
-                // ✅ 첫날 데이터 조회
-                await fetchDayData(sessionData.sessionId);
-                await fetchPortfolio(sessionData.sessionId);
-
             } else {
                 alert(response.data.message || "투자 세션 시작 실패");
             }
@@ -100,6 +157,53 @@ const Trade = () => {
             console.error("Simulation Start Error:", error);
             alert("투자를 시작하지 못했습니다: " + (error.response?.data?.message || "서버 오류"));
         }
+    };
+
+    // 내 세션 목록 조회 (GET /simulation/sessions)
+    const fetchSessions = async () => {
+        try {
+            const res = await api.get('/simulation/sessions');
+            if (res.data.status === "SUCCESS") {
+                const list = Array.isArray(res.data.data) ? res.data.data : [];
+                setSessions(list);
+                return list;
+            }
+        } catch (e) {
+            console.error("Fetch sessions error:", e);
+        }
+        return [];
+    };
+
+    // 목록에서 복구할 세션 선택(저장된 sid 우선 → ACTIVE 우선 → 최신)
+    const pickSessionIdToRestore = (list) => {
+        const savedSid = localStorage.getItem("simulationSessionId");
+        if (savedSid && list.some(s => String(s.sessionId) === String(savedSid))) {
+            return Number(savedSid);
+        }
+
+        const active = list.find(s => String(s.status).toUpperCase() === "ACTIVE");
+        if (active) return Number(active.sessionId);
+
+        // 최신 세션(가능하면 createdAt 기준, 없으면 sessionId 큰 것)
+        const sorted = [...list].sort((a, b) => {
+            const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            if (ad !== bd) return bd - ad;
+            return (Number(b.sessionId) || 0) - (Number(a.sessionId) || 0);
+        });
+        return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
+    };
+
+    // sid로 현재 세션 세팅 + 관련 데이터 로딩
+    const restoreSession = async (sid, listForMeta = null) => {
+        if (!sid) return;
+
+        // 목록에 있으면 그 객체를 session으로 넣고(날짜 등 메타 유지), 없으면 최소객체
+        const fromList = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
+        setSession(fromList ? fromList : { sessionId: sid });
+
+        localStorage.setItem("simulationSessionId", String(sid));
+        await Promise.all([fetchDayData(sid), fetchPortfolio(sid)]);
     };
 
     const fetchUserInfo = async () => {
@@ -111,7 +215,7 @@ const Trade = () => {
         }
 
         try {
-            const response = await axios.get('/user/me');
+            const response = await api.get('/user/me');
             if (response.data.status === "SUCCESS") {
                 setUserInfo(response.data.data);
             }
@@ -122,8 +226,7 @@ const Trade = () => {
 
     const fetchDayData = async (sid) => {
         try {
-            const response = await axios.get(`/simulation/sessions/${sid}/daily-data`);
-
+            const response = await api.get(`/simulation/sessions/${sid}/daily-data`);
             if (response.data.status === "SUCCESS") {
                 setDayData(response.data.data);
             }
@@ -136,7 +239,7 @@ const Trade = () => {
     // 4. 내 포트폴리오/잔액 조회 (GET /simulation/sessions/{sessionId}/portfolio)
     const fetchPortfolio = async (sid) => {
         try {
-            const response = await axios.get(`/simulation/sessions/${sid}/portfolio`);
+            const response = await api.get(`/simulation/sessions/${sid}/portfolio`);
             if (response.data.status === "SUCCESS") {
                 setPortfolio(response.data.data);
             }
@@ -147,12 +250,12 @@ const Trade = () => {
 
     // 5. 다음 날짜로 이동 (POST /simulation/sessions/{sessionId}/next-day)
     const handleNextDay = async () => {
-        if (!session) return alert("먼저 투자를 시작해주세요.");
+        if (!session?.sessionId) return alert("먼저 투자를 시작해주세요.");
         try {
-            const response = await axios.post(`/simulation/sessions/${session.sessionId}/next-day`);
+            const response = await api.post(`/simulation/sessions/${session.sessionId}/next-day`);
             if (response.data.status === "SUCCESS") {
-                setDayData(response.data.data); // 업데이트된 날짜 및 뉴스 정보
-                fetchPortfolio(session.sessionId); // 자산 정보 갱신
+                setDayData(response.data.data);
+                await fetchPortfolio(session.sessionId);
             }
         } catch (error) {
             console.error("Next day error", error);
@@ -162,18 +265,18 @@ const Trade = () => {
 
     // 6. 매수/매도 실행 (POST /simulation/sessions/{sessionId}/trades)
     const handleTrade = async (type) => {
-        if (!session) return alert("투자가 진행 중이 아닙니다.");
+        if (!session?.sessionId) return alert("투자가 진행 중이 아닙니다.");
         try {
-            const response = await axios.post(`/simulation/sessions/${session.sessionId}/trades`, {
+            const response = await api.post(`/simulation/sessions/${session.sessionId}/trades`, {
                 stockCode: tradeOrder.stockCode,
-                tradeType: type, // "BUY" or "SELL"
+                tradeType: type,
                 quantity: tradeOrder.quantity,
-                price: 58000 // 실제 환경에서는 차트의 현재가 연동
+                price: 58000
             });
 
             if (response.data.status === "SUCCESS") {
                 alert(`${tradeOrder.stockCode} ${tradeOrder.quantity}주 ${type === 'BUY' ? '매수' : '매도'} 완료!`);
-                fetchPortfolio(session.sessionId); // 거래 후 잔액 갱신
+                await fetchPortfolio(session.sessionId);
             } else {
                 alert(response.data.message || "거래 실패");
             }
@@ -185,6 +288,12 @@ const Trade = () => {
     const handleUpdateInfo = () => {
         setIsEditing(false);
         alert("정보가 수정되었습니다.");
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("simulationSessionId");
+        navigate("/login");
     };
 
     const generateDateOptions = (start, end) => {
@@ -202,8 +311,31 @@ const Trade = () => {
 
     useEffect(() => {
         document.title = "NewsPin - Trading Dashboard";
-        fetchUserInfo();
+
+        (async () => {
+            const token = getAccessToken();
+            if (!token) {
+                alert("로그인이 필요합니다.");
+                navigate("/login");
+                return;
+            }
+
+            await fetchUserInfo();
+
+            const list = await fetchSessions();
+            const sid = pickSessionIdToRestore(list);
+
+            if (sid) {
+                await restoreSession(sid, list);
+            } else {
+                setSession(null);
+                setDayData(null);
+                setPortfolio(null);
+                localStorage.removeItem("simulationSessionId");
+            }
+        })();
     }, []);
+
 
     return (
         <div className="w-full h-screen bg-blue-700 flex flex-col items-center md:p-2 font-agbalumo overflow-hidden">
@@ -227,7 +359,7 @@ const Trade = () => {
                         내 정보
                     </button>
                     <span className='font-bold mb-2'>|</span>
-                    <button onClick={() => navigate('/login')} className="hover:underline font-jua cursor-pointer">로그아웃</button>
+                    <button onClick={handleLogout} className="hover:underline font-jua cursor-pointer">로그아웃</button>
                 </div>
             </div>
 
