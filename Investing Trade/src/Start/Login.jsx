@@ -26,47 +26,64 @@ const Login = () => {
     mode: "onChange"
   });
 
-  const onSubmit = async (data) => {
-    try {
-      console.log("로그인 요청 데이터:", { email: data.email, password: data.password });
+  const onSubmit = async (data, e) => {
 
-      const response = await axios.post(`${API_BASE_URL}/user/sign-in`, {
-        email: data.email,
-        password: data.password
-      }, {
+    // 폼 제출 시 브라우저의 기본 새로고침(GET 요청)을 명시적으로 차단
+    if (e) e.preventDefault();
+
+    try {
+
+      const response = await axios({
+        method: 'post',
+        url: `${API_BASE_URL}/user/sign-in`,
+        data: {
+          email: data.email,
+          password: data.password
+        },
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': '*/*'
+          'Content-Type': 'application/json'
         }
       });
 
+      
       const resData = response.data;
 
-      // 2. 명세서에 따른 성공 조건 체크 (status: "SUCCESS")
-      if (resData.status === "SUCCESS") {
-        // 명세서 구조: data { jwtToken { grantType, accessToken, refreshToken } }
-        const { grantType, accessToken, refreshToken } = resData.data.jwtToken;
+      // [디버깅] 이 로그가 찍히는지 확인하세요. 안 찍힌다면 통신 자체가 실패한 것입니다.
+      console.log("서버 응답 데이터:", resData);
+
+      // 2. 서버 응답이 SUCCESS가 아니면 여기서 즉시 종료
+      if (!resData || resData.status !== "success") {
+        alert(resData?.message || "로그인 정보를 확인해주세요.");
+        return; // 다음 로직으로 넘어가지 않게 차단
+      }
+
+      // 3. 토큰 데이터가 있는지 안전하게 확인
+      const tokenData = resData.data?.jwtToken || resData.data?.signInResponse?.jwtToken;
+
+      // 4. 모든 검증(토큰 존재 여부) 통과 후 저장 및 이동
+      if (tokenData && tokenData.accessToken) {
+        const { grantType, accessToken, refreshToken } = tokenData;
 
         // 로컬 스토리지 저장
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
         localStorage.setItem('grantType', grantType);
 
-        // 3. 헤더 설정 시 공백 주의
+        // 이후 모든 API 요청에 사용할 공통 인증 헤더 설정
         axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
 
         alert("로그인 성공!");
-        navigate('/main');
+        navigate('/main'); // 드디어 방해 없이 이 줄이 실행됩니다.
       } else {
-        alert(resData.message || "가입되지 않은 사용자이거나 정보가 일치하지 않습니다.");
+        console.error("Token structure mismatch:", resData);
+        alert("인증 정보가 유효하지 않습니다. 다시 시도해주세요.");
       }
-    } catch (error) {
-      // 3. 서버 연결 실패 혹은 400/500번대 에러 처리 (네트워크 오류, 존재하지 않는 계정 등)
-      console.error("Login Error Details:", error.response?.data);
 
-      // 서버가 C999를 던질 때 에러 객체 구조 확인
-      const serverMessage = error.response?.data?.message || "로그인 중 오류가 발생했습니다. 이메일과 비밀번호를 확인해주세요."; console.error("Login Error Details:", error.response?.data);
-      alert(serverMessage);
+    } catch (error) {
+      // 서버 에러(C999 등) 및 네트워크 오류 처리
+      console.error("Login Error:", error.response?.data);
+      const msg = error.response?.data?.message || "서버 통신 중 오류가 발생했습니다.";
+      alert(msg);
     }
   };
 
