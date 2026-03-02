@@ -52,25 +52,27 @@ const Login = () => {
         localStorage.setItem('refreshToken', refreshToken);
         localStorage.setItem('grantType', grantType);
 
-       // 3. 헤더 설정 시 공백 주의
-      axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
+        // 3. 헤더 설정 시 공백 주의
+        axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
 
-      alert("로그인 성공!");
-      navigate('/main');
-    } else {
-      alert(resData.message || "로그인 정보를 확인해주세요.");
+        alert("로그인 성공!");
+        navigate('/main');
+      } else {
+        alert(resData.message || "가입되지 않은 사용자이거나 정보가 일치하지 않습니다.");
+      }
+    } catch (error) {
+      // 3. 서버 연결 실패 혹은 400/500번대 에러 처리 (네트워크 오류, 존재하지 않는 계정 등)
+      console.error("Login Error Details:", error.response?.data);
+
+      // 서버가 C999를 던질 때 에러 객체 구조 확인
+      const serverMessage = error.response?.data?.message || "로그인 중 오류가 발생했습니다. 이메일과 비밀번호를 확인해주세요."; console.error("Login Error Details:", error.response?.data);
+      alert(serverMessage);
     }
-  } catch (error) {
-    // 서버가 C999를 던질 때 에러 객체 구조 확인
-    const serverMessage = error.response?.data?.message || "서버 내부 오류가 발생했습니다.";
-    console.error("Login Error Details:", error.response?.data);
-    alert(serverMessage);
-  }
-};
+  };
 
   const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
 
-// 실시간 테두리 스타일 결정 함수
+  // 실시간 테두리 스타일 결정 함수
   const getBorderStyle = (fieldName) => {
     if (errors[fieldName]) return 'border-red-500 bg-red-50 focus:ring-red-500';
     if (dirtyFields[fieldName]) return 'border-[#5D6DED] bg-blue-50 focus:ring-[#5D6DED]';
@@ -114,17 +116,17 @@ const Login = () => {
           <h2 className="text-5xl font-jua text-center mb-20 text-gray-800">로그인</h2>
           <form className="space-y-7" onSubmit={handleSubmit(onSubmit)}>
             {/* 상단: 로그인 ID용 이메일 */}
-                        <div className="space-y-3">
-                            <p className='font-jua text-lg'>이메일</p>
-                            <input
-                                type="text"
-                                placeholder="newspin@naver.com"
-                                {...register("email", { // 이름: email
-                                    required: "이메일을 입력해주세요.",
-                                    pattern: { value: /^[^\s@]+@[^\s@]+\.com$/, message: "형식 오류" }
-                                })}
-                                className={`w-full px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('email')}`}
-                            />
+            <div className="space-y-3">
+              <p className='font-jua text-lg'>이메일</p>
+              <input
+                type="text"
+                placeholder="newspin@naver.com"
+                {...register("email", { // 이름: email
+                  required: "이메일을 입력해주세요.",
+                  pattern: { value: /^[^\s@]+@[^\s@]+\.com$/, message: "올바른 이메일 형식을 입력해주세요!" }
+                })}
+                className={`w-full px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('email')}`}
+              />
               {errors.email && <p className="text-red-500 text-xs font-bold">{errors.email.message}</p>}
             </div>
 
