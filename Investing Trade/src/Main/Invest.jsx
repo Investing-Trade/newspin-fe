@@ -12,6 +12,7 @@ import portfolio from '../assets/pie-chart.png';
 import logout from '../assets/logout.png';
 import correction from '../assets/correction-tape.png';
 import axios from 'axios';
+import save from '../assets/save.png';
 import { Eye, EyeOff } from 'lucide-react';
 
 const Invest = () => {
@@ -23,7 +24,7 @@ const Invest = () => {
     const [userInfo, setUserInfo] = useState({
         userId: "",
         email: "",
-        password: "" // 초기값은 비워둔 상태
+        password: "" // 초기값
     });
 
     // 수정 시 입력값을 담을 상태
@@ -33,30 +34,45 @@ const Invest = () => {
         password: ""
     });
 
-    // --- [GET /user/me] 내 정보 불러오기 ---
+    // 로그인 여부 확인 및 정보 로드
     const fetchUserInfo = async () => {
+        const token = localStorage.getItem('accessToken');
+
+        // 토큰이 없으면 즉시 로그인 페이지로 리다이렉트
+        if (!token) {
+            alert("로그인이 필요한 서비스입니다.");
+            navigate('/login');
+            return;
+        }
+
         try {
-            const token = localStorage.getItem('accessToken');
             const response = await axios.get('/user/me', {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             if (response.data.status.toLowerCase() === "success") {
                 const { userId, email } = response.data.data;
-                setUserInfo({ userId, email, password: "" });
-                setEditData({ userId, email, password: "" });
+
+                const savedPwd = localStorage.getItem('userPwd') || "********";
+
+                const fetchedInfo = { userId, email, password: savedPwd };
+
+                setUserInfo(fetchedInfo);
+                setEditData(fetchedInfo);
             }
         } catch (error) {
             console.error("사용자 정보 로드 실패:", error);
-            if (error.response?.status === 401) navigate('/login');
+            if (error.response?.status === 401) {
+                localStorage.removeItem('accessToken');
+                navigate('/login');
+            }
         }
     };
 
-    // --- [PATCH /user/me] 내 정보 수정하기 연동 ---
+    // 정보 수정 및 저장 로직
     const handleUpdateInfo = async () => {
         try {
             const token = localStorage.getItem('accessToken');
-            // 명세서 4번 이미지의 UserUpdateRequest 구조 반영
             const response = await axios.patch('/user/me', {
                 userId: editData.userId,
                 email: editData.email,
@@ -67,12 +83,20 @@ const Invest = () => {
 
             if (response.data.status.toLowerCase() === "success") {
                 alert("내 정보가 성공적으로 수정되었습니다.");
-                setUserInfo(prev => ({ ...prev, ...editData }));
+
+                // 변경된 정보를 화면에 즉시 반영
+                setUserInfo({ ...editData });
+
+                // [핵심] 변경된 비밀번호를 로컬 스토리지에도 업데이트
+                localStorage.setItem('userPwd', editData.password);
+
                 setIsEditing(false);
                 setShowPassword(false);
             }
         } catch (error) {
-            alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
+            // 409 Conflict 발생 시 메시지 처리
+            const msg = error.response?.data?.message || "수정 중 오류가 발생했습니다.";
+            alert(msg);
         }
     };
 
@@ -87,6 +111,7 @@ const Invest = () => {
         } finally {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
+            localStorage.removeItem('userPwd');
             navigate('/login');
         }
     };
@@ -186,7 +211,7 @@ const Invest = () => {
                                     value={isEditing ? editData.userId : userInfo.userId}
                                     onChange={(e) => setEditData({ ...editData, userId: e.target.value })}
                                     readOnly={!isEditing}
-                                    className={`w-full border-2 border-black rounded-xl p-3 font-serif italic font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
                                 />
                             </div>
 
@@ -198,30 +223,36 @@ const Invest = () => {
                                     value={isEditing ? editData.email : userInfo.email}
                                     onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                                     readOnly={!isEditing}
-                                    className={`w-full border-2 border-black rounded-xl p-3 font-serif italic font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
                                 />
                             </div>
 
-                            {/* 비밀번호 필드 (토글 아이콘 추가) */}
+                            {/* 비밀번호 필드: lucide icon 토글 적용 */}
                             <div>
-                                <label className="block mb-2">비밀번호 변경</label>
+                                <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
                                 <div className="relative">
                                     <input
                                         type={showPassword ? "text" : "password"}
-                                        value={isEditing ? editData.password : "********"}
+
+                                        // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
+                                        value={isEditing
+                                            ? editData.password
+                                            : (showPassword ? userInfo.password : "********")
+                                        }
+                                        
                                         onChange={(e) => setEditData({ ...editData, password: e.target.value })}
                                         readOnly={!isEditing}
                                         placeholder={isEditing ? "새 비밀번호 입력" : ""}
-                                        className={`w-full border-2 border-black rounded-xl p-3 font-serif italic font-bold pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
                                     />
-                                    {isEditing && (
-                                        <button
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
-                                        >
-                                            {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
-                                        </button>
-                                    )}
+                                    {/* 수정 중이 아닐 때도 비밀번호를 볼 수 있도록 버튼 상시 활성화 */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
+                                    </button>
                                 </div>
                             </div>
 
@@ -231,20 +262,21 @@ const Invest = () => {
 
                         <div className="flex gap-4 space-x-6">
                             {isEditing ? (
-                                <button onClick={handleUpdateInfo} className="flex-1 bg-green-600 text-white active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-green-700">
+                                <button onClick={handleUpdateInfo} className="flex-1 bg-sky-500 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-sky-600">
+                                    <img src={save} alt="save" className='w-12' />
                                     <span>저장하기</span>
                                 </button>
                             ) : (
-                                <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
+                                <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
                                     <img src={correction} alt="correct" className='w-12' />
                                     <span>수정하기</span>
                                 </button>
                             )}
                             <button
                                 onClick={() => { setIsProfileModalOpen(false); setIsEditing(false); setShowPassword(false); }}
-                                className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white py-2 flex items-center justify-center gap-2 hover:bg-indigo-700"
+                                className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
                             >
-                                <img src={logout} alt="logout" className='w-12' />
+                                <img src={logout} alt="logout" className='w-13' />
                                 <span>메인 페이지로</span>
                             </button>
                         </div>
