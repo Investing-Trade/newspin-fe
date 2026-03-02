@@ -10,86 +10,102 @@ import logout from '../assets/logout.png';
 import refresh from '../assets/re.png';
 import correction from '../assets/correction-tape.png';
 import axios from 'axios';
+import exit from '../assets/exit.png';
+import save from '../assets/save.png';
+import { Eye, EyeOff } from 'lucide-react';
 
 const News = () => {
     const navigate = useNavigate();
-
     const API_BASE_URL = 'http://52.78.151.56:8080';
     const token = localStorage.getItem('accessToken');
 
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+
     const [newsData, setNewsData] = useState(null);
     const [userComment, setUserComment] = useState("");
     const [selectedSentiment, setSelectedSentiment] = useState(null);
     const [aiResult, setAiResult] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    const [userInfo, setUserInfo] = useState({
-        email: "",
-        password: "********"
-    });
+    const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
+    const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
 
-    // 1. 내 정보 불러오기 (GET /user/me)
+    // 내 정보 불러오기 (GET /user/me)
     const fetchUserInfo = async () => {
         try {
             const response = await axios.get(`${API_BASE_URL}/user/me`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (response.data.status === "SUCCESS") {
-                setUserInfo(prev => ({ ...prev, email: response.data.data.email }));
+            if (response.data.status.toLowerCase() === "success") {
+                const { userId, email } = response.data.data;
+                const savedPwd = localStorage.getItem('userPwd') || "";
+                const fetchedInfo = { userId, email, password: savedPwd };
+                setUserInfo(fetchedInfo);
+                setEditData(fetchedInfo);
             }
         } catch (error) {
-            console.error("사용자 정보 로드 실패:", error);
+            if (error.response?.status === 401) {
+                localStorage.clear();
+                navigate('/login');
+            }
         }
     };
 
-    // 2. 랜덤 뉴스 불러오기 (GET /news/random)
+    // 내 정보 수정하기 연동 (PATCH /user/me)
+    const handleUpdateInfo = async () => {
+        try {
+            const response = await axios.patch(`${API_BASE_URL}/user/me`, editData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (response.data.status.toLowerCase() === "success") {
+                alert("정보가 수정되었습니다.");
+                setUserInfo({ ...editData });
+                localStorage.setItem('userPwd', editData.password);
+                setIsEditing(false);
+                setShowPassword(false);
+            }
+        } catch (error) {
+            alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
+        }
+    };
+
+    // 랜덤 뉴스 불러오기 (GET /news/random)
     const fetchRandomNews = async () => {
         setLoading(true);
         try {
             const response = await axios.get(`${API_BASE_URL}/news/random`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-
-            if (response.data.status === "SUCCESS") {
+            if (response.data.status.toLowerCase() === "success") {
                 setNewsData(response.data.data);
+
+                // 새 뉴스를 가져올 때 이전 분석 결과 초기화
                 setAiResult(null);
                 setUserComment("");
                 setSelectedSentiment(null);
             }
         } catch (error) {
-            console.error("뉴스 로딩 에러:", error.response?.data || error.message);
-            if (error.response?.status === 401) {
-                alert("세션이 만료되었습니다. 다시 로그인해주세요.");
-                navigate('/login');
-            }
+            console.error("뉴스 로딩 에러:", error);
+            alert("뉴스를 불러오는 데 실패했습니다.");
         } finally {
             setLoading(false);
         }
     };
 
-    // 3. 의견 제출 및 AI 분석 (형식 일치화 작업)
+    // 의견 제출 및 AI 분석 (POST /news/{newsId}/analyze)
     const handleSubmitOpinion = async () => {
-        // newsData가 유효한지, newsId가 존재하는지 먼저 확인
-        if (!newsData || !newsData.newsId) {
-            alert("뉴스 데이터가 올바르지 않습니다.");
+        if (!newsData?.newsId) return;
+        if (!selectedSentiment || !userComment.trim()) {
+            alert("호재 or 악재 선택과 판단 근거를 모두 입력해주세요.");
             return;
         }
 
-        if (!selectedSentiment || !userComment) {
-            alert("판단 결과와 근거 코멘트를 모두 입력해주세요.");
-            return;
-        }
-
-        // 서버 ENUM 형식에 맞춘 대문자 고정
-        const sentimentValue = selectedSentiment === "호재" ? "POSITIVE" : "NEGATIVE";
-
-        // AIAnalysisRequest 형식에 맞춘 객체 생성
         const requestData = {
-            sentiment: sentimentValue, // 필수 필드 1
-            reason: userComment.trim() // 필수 필드 2 (공백 제거)
+            sentiment: selectedSentiment, // 'POSITIVE' 또는 'NEGATIVE'
+            reason: userComment.trim()
         };
-
         try {
             const response = await axios.post(
                 `${API_BASE_URL}/news/${newsData.newsId}/analyze`,
@@ -97,30 +113,26 @@ const News = () => {
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json' // 500 에러 방지를 위해 명시
+                        'Content-Type': 'application/json'
                     }
                 }
             );
 
-            if (response.data.status === "SUCCESS") {
+            if (response.data.status.toLowerCase() === "success") {
                 setAiResult(response.data.data);
             }
         } catch (error) {
-            // 서버가 왜 화가 났는지(500) 상세 이유를 확인하기 위한 로그
-            console.error("전송 데이터:", requestData);
-            console.error("에러 응답:", error.response?.data);
-            alert(`의견 제출 실패: ${error.response?.data?.message || "형식 오류가 발생했습니다."}`);
+            alert(error.response?.data?.message || "분석 요청에 실패했습니다.");
         }
     };
 
-    // 4. 로그아웃 (POST /user/logout)
     const handleLogout = async () => {
         try {
             await axios.post(`${API_BASE_URL}/user/logout`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-        } catch (error) {
-            console.error("서버 로그아웃 처리 실패:", error);
+        } catch (e) {
+            console.error("로그아웃 API 호출 실패", e);
         } finally {
             localStorage.clear();
             navigate('/login');
@@ -129,8 +141,7 @@ const News = () => {
 
     useEffect(() => {
         document.title = "NewsPin - News";
-        if (!token || token === "undefined" || token === "null") {
-            alert("로그인이 필요합니다.");
+        if (!token) {
             navigate('/login');
             return;
         }
@@ -153,26 +164,32 @@ const News = () => {
 
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button
-                        onClick={() => setIsProfileModalOpen(true)}
+                        onClick={() => {
+                            setIsProfileModalOpen(true);
+                            setIsEditing(false);
+                        }}
                         className="hover:underline font-jua cursor-pointer"
                     >
                         내 정보
-                    </button> <span className='font-bold mb-2'>|</span>
-                    <button onClick={() => navigate('/login')} className="hover:underline font-jua cursor-pointer">로그아웃</button>
+                    </button>
+                    <span className='font-bold mb-2'>|</span>
+                    <button onClick={handleLogout} className="hover:underline font-jua cursor-pointer">로그아웃</button>
                 </div>
             </div>
 
+            {/* 뉴스 및 분석 컨텐츠 영역 */}
             <div className="w-full max-w-6xl bg-white rounded-xl shadow-2xl p-6 flex flex-col gap-4 border-4 border-gray-400 flex-1 overflow-hidden">
-                {/* 1. 뉴스 상단부 */}
+                {/* 뉴스 상단부 */}
                 <div className="flex flex-col border-2 rounded-lg border-black p-1 md:flex-row pb-1 gap-2 h-[50%] shrink-2">
                     <div className="w-full md:w-1/3 border-2 border-gray-300 rounded-lg flex items-center justify-center p-4 h-full bg-gray-50">
                         <div className="text-3xl font-bold flex items-center gap-2">
                             <span className="text-green-700 uppercase font-jua">
-                                {loading ? "LOADING..." : "NEWS SOURCE"}
+                                {loading ? "LOADING..." : (newsData?.source || "NEWS SOURCE")}
                             </span>
+                            <span className="text-sm text-gray-500 font-jua">{newsData?.articleDate}</span>
                         </div>
                     </div>
-                    <div className="w-full md:w-9/10 flex flex-col h-full">
+                    <div className="w-full md:w-9/10 flex flex-col h-full p-2">
                         <h2 className="text-xl font-bold mb-2 truncate font-jua">
                             {loading ? "뉴스를 가져오는 중입니다..." : newsData?.title || "뉴스가 없습니다."}
                         </h2>
@@ -185,11 +202,13 @@ const News = () => {
                     </div>
                 </div>
 
+                {/* 하단 분석 영역 */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 overflow-hidden">
+                    {/* 왼쪽: 입력부 */}
                     <div className="md:col-span-3 flex flex-col gap-3 h-full overflow-hidden">
                         <div className="flex gap-2 w-full items-center justify-center font-jua">
                             <button
-                                onClick={() => setSelectedSentiment("호재")}
+                                onClick={() => setSelectedSentiment("POSITIVE")}
                                 className={`flex-1 flex items-center justify-center gap-2 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer ${selectedSentiment === "호재" ? "bg-blue-800 scale-105 ring-2 ring-blue-300" : "bg-blue-600 hover:bg-cyan-400"}`}
                             >
                                 <img src={like} alt="like" className="w-8" />
@@ -197,7 +216,7 @@ const News = () => {
                             </button>
 
                             <button
-                                onClick={() => setSelectedSentiment("악재")}
+                                onClick={() => setSelectedSentiment("NEGATIVE")}
                                 className={`flex-1 flex items-center justify-center gap-2 border-1 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer ${selectedSentiment === "악재" ? "bg-red-800 scale-105 ring-2 ring-red-300" : "bg-red-500 hover:bg-rose-700"}`}
                             >
                                 <img src={dislike} alt="dislike" className="w-8" />
@@ -240,26 +259,38 @@ const News = () => {
                                     의견을 제출하면 AI 분석 결과를 확인할 수 있습니다.
                                 </div>
                             ) : (
-                                <>
-                                    <div className="mb-4">
-                                        <p className="font-bold text-blue-800">AI 감성 분석 결과:</p>
-                                        <ul className="list-disc list-inside ml-2 text-gray-800">
-                                            <li>AI 판단: <span className="font-bold text-indigo-600">{aiResult.aiSentiment}</span></li>
-                                            <li>정답 여부: <span className={`font-bold ${aiResult.correct ? "text-green-600" : "text-red-600"}`}>
-                                                {aiResult.correct ? "일치" : "불일치"}
-                                            </span></li>
-                                        </ul>
+                                <div className="animate-fadeIn">
+                                    <div className="mb-6 p-3 bg-white rounded-lg border shadow-sm">
+                                        <p className="font-bold text-blue-800 text-base mb-2">감성 분석 비교</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="text-center p-2 rounded bg-blue-50">
+                                                <p className="text-xs text-gray-500">나의 판단</p>
+                                                <p className={`font-bold ${selectedSentiment === 'POSITIVE' ? 'text-blue-600' : 'text-red-600'}`}>
+                                                    {selectedSentiment === 'POSITIVE' ? '호재' : '악재'}
+                                                </p>
+                                            </div>
+                                            <div className="text-center p-2 rounded bg-indigo-50">
+                                                <p className="text-xs text-gray-500">AI 판단</p>
+                                                <p className={`font-bold ${aiResult.aiSentiment === 'POSITIVE' ? 'text-blue-600' : 'text-red-600'}`}>
+                                                    {aiResult.aiSentiment === 'POSITIVE' ? '호재' : aiResult.aiSentiment === 'NEGATIVE' ? '악재' : '중립'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 text-center">
+                                            <span className={`px-4 py-1 rounded-full text-white font-bold ${aiResult.correct ? "bg-green-500" : "bg-orange-500"}`}>
+                                                {aiResult.correct ? "분석 일치!" : "분석 불일치"}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-bold text-blue-800">AI 피드백:</p>
-                                        <p className="text-gray-800 text-[13.5px] whitespace-pre-wrap">
+                                    <div className="p-3 bg-white rounded-lg border shadow-sm">
+                                        <p className="font-bold text-blue-800 text-base mb-2">AI 피드백</p>
+                                        <p className="text-gray-800 text-[14px] whitespace-pre-wrap leading-relaxed">
                                             {aiResult.aiFeedback}
                                         </p>
                                     </div>
-                                </>
+                                </div>
                             )}
                         </div>
-                        B
                         <div className="flex gap-20 mt-1 w-[50%] ml-60 items-center justify-center">
                             <button
                                 onClick={fetchRandomNews}
@@ -270,12 +301,15 @@ const News = () => {
                             </button>
 
                             <button onClick={() => navigate('/main')} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
-                                <img src={logout} alt="exit" className="w-8" />
+                                <img src={exit} alt="exit" className="w-8" />
                                 <span >학습종료</span>
                             </button>
                         </div>
                     </div>
                 </div>
+
+                {/* [내 정보 모달] - API 및 가시화 로직 연동 */}
+
                 {isProfileModalOpen && (
                     <div className="fixed inset-0 bg-white/60 flex justify-center items-center z-50">
                         <div className="bg-white rounded-3xl p-10 w-[500px] shadow-2xl flex flex-col font-jua">
