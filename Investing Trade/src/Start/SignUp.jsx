@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// 백엔드 서버 주소
-axios.defaults.baseURL = 'http://52.78.151.56:8080';
+// 백엔드 서버 주소 설정
+const API_BASE_URL = 'http://52.78.151.56:8080';
+axios.defaults.baseURL = API_BASE_URL;
 
 const SignUp = () => {
     const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
@@ -30,31 +31,27 @@ const SignUp = () => {
 
     // 인증번호 발송 함수: /user/email/send-verification
     const handleSendCode = async () => {
-        const vEmail = watch("verificationEmail");
-        if (!vEmail || errors.verificationEmail) {
-            alert("인증번호를 받을 이메일을 입력해주세요.");
+        const isEmailValid = await trigger("verificationEmail");
+
+        if (!vEmail || !isEmailValid) {
+            alert("인증번호를 받을 이메일을 올바르게 입력해주세요.");
             return;
         }
 
         try {
-            const response = await axios.post('/user/email/send-verification', {
-                email: vEmail
+            const response = await axios.post('/user/email/send-verification', null, {
+                params: { email: vEmail }
             });
 
-            if (response.data.status.toUpperCase() === "SUCCESS" || response.data.code === "200") {
-                setIsCodeSent(true);
-                setTimer(180);
-                alert("인증번호가 발송되었습니다.");
-            } else {
-                // 서버에서 내려주는 구체적인 에러 메시지(C999 등) 표시
-                alert(`[${response.data.code}] ${response.data.message}`);
-            }
-        } catch (error) {
-            // [C999 에러 대응] 서버 에러 응답 객체에서 메시지 추출
+           if (response.data.status === "success" || response.data.code === "200") {
+            setIsCodeSent(true);
+            setTimer(180);
+            alert("인증번호가 발송되었습니다.");
+        } else {
+            alert(`[${response.data.code}] ${response.data.message}`);
+        }
+    } catch (error) {
             const errorData = error.response?.data;
-            const errorMessage = errorData?.message || "이메일 전송 중 서버 오류가 발생했습니다.";
-            const errorCode = errorData?.code ? `(${errorData.code})` : "";
-
             alert(`${errorData?.message || "서버 오류"} (${errorData?.code || "C999"})`); console.error("인증번호 발송 에러 상세:", errorData);
         }
     };
@@ -75,10 +72,14 @@ const SignUp = () => {
         register,
         handleSubmit,
         watch,
+        trigger,
         formState: { errors, dirtyFields },
     } = useForm({
         mode: "onChange"
     });
+
+    const passwordValue = watch("password");
+    const vEmail = watch("verificationEmail");
 
     // [수정] 제출 핸들러: 인증 확인 후 회원가입 및 데이터 매핑 최적화
     const onSubmit = async (data) => {
@@ -88,7 +89,7 @@ const SignUp = () => {
                 code: data.authCode
             });
 
-            const verifyResult = verifyRes.data.data; // data 필드에 접근
+            const verifyResult = verifyRes.data.data;
 
             if (verifyRes.data.status?.toUpperCase() !== "SUCCESS" || !verifyResult?.verified) {
                 alert(verifyResult?.message || verifyRes.data.message || "인증번호가 올바르지 않습니다.");
@@ -121,10 +122,7 @@ const SignUp = () => {
 
     // 정규식 설정
     const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.com$/;
-
-    // 비밀번호 확인을 위한 값 감시
-    const passwordValue = watch("password");
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
     // 실시간 테두리 색상 제어 함수
     const getBorderStyle = (fieldName) => {
@@ -238,7 +236,7 @@ const SignUp = () => {
                                     {isCodeSent ? "재전송" : "인증번호 전송"}
                                 </button>
                             </div>
-                            {errors.verificationEmail && <p className="text-red-500 text-xs font-bold">{errors.email.message}</p>}
+                            {errors.verificationEmail && <p className="text-red-500 text-xs font-bold">{errors.verificationEmail.message}</p>}
                         </div>
 
                         {/* 인증번호 입력 섹션 (인증번호 전송 시에만 표시) */}

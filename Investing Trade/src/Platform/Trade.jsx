@@ -3,16 +3,11 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import like from '../assets/thumb-up.png';
-import dislike from '../assets/dislike.png';
-import submit from '../assets/submit.png';
-import logout from '../assets/logout-1.png';
-import refresh from '../assets/re.png';
+import logout from '../assets/logout.png';
 import correction from '../assets/correction-tape.png';
 import trade from '../assets/trade.png';
 import trading from '../assets/trading.png';
 import selling from '../assets/selling.png';
-import write from '../assets/write-review.png';
 import it from '../assets/it.png';
 import enter from '../assets/popcorn.png';
 import cutlery from '../assets/cutlery.png';
@@ -24,26 +19,460 @@ import start from '../assets/start.png';
 import review from '../assets/write-review.png';
 import distribution from '../assets/distribution.png';
 import globe from '../assets/globe.png';
+import axios from 'axios';
+import save from '../assets/save.png';
+import { Eye, EyeOff } from 'lucide-react';
+import completion from '../assets/completion.png';
+import stop from '../assets/stop-sign.png';
+import house from '../assets/house.png';
+import schedule from '../assets/schedule.png';
+
+const api = axios.create({
+    baseURL: "http://52.78.151.56:8080",
+    withCredentials: false,
+});
+
+const getAccessToken = () => {
+    const raw = localStorage.getItem("accessToken");
+    if (!raw) return null;
+
+    const normalize = (t) => {
+        if (!t) return null;
+        const s = String(t).trim();
+        return s.toLowerCase().startsWith("bearer ") ? s.slice(7).trim() : s;
+    };
+
+    try {
+        if (raw.startsWith('"') || raw.startsWith("{") || raw.startsWith("[")) {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed === "string") return normalize(parsed);
+
+            return normalize(
+                parsed?.accessToken ??
+                parsed?.access_token ??
+                parsed?.token ??
+                parsed?.data?.accessToken ??
+                parsed?.data?.token
+            );
+        }
+        return normalize(raw);
+    } catch {
+        return normalize(raw);
+    }
+};
+
+api.interceptors.request.use((config) => {
+    const token = getAccessToken();
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+// ✅ 403/401이면 토큰 제거 후 로그인으로 보내기(세션 API 포함 전부에 적용)
+api.interceptors.response.use(
+    (res) => res,
+    (error) => {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("simulationSessionId");
+            alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
+            window.location.href = "/login";
+        }
+        return Promise.reject(error);
+    }
+);
+
 const Trade = () => {
     const navigate = useNavigate();
-    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-    {/* 날짜 옵션 생성을 위한 헬퍼 함수 */ }
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+
+    // API 데이터 상태
+    const [trades, setTrades] = useState([]);      // 거래 내역 목록
+    const [tradesLoading, setTradesLoading] = useState(false);
+    const [sessions, setSessions] = useState([]); // 내 시뮬레이션 세션 목록
+    const [session, setSession] = useState(null); // 현재 사용 중인 세션
+    const [dayData, setDayData] = useState(null); // 현재 날짜의 뉴스 및 자산 정보
+    const [portfolio, setPortfolio] = useState(null); // setPortfolio 상태 추가
+
+    const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
+    const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
+
+    // 입력 폼 상태
+    const [config, setConfig] = useState({
+        initialCapital: 1000000,
+        startDate: '2020-01-01',
+        endDate: '2020-03-31'
+    });
+
+    // ✅ 종목 및 수량 관리 상태 수정
+    const [tradeOrder, setTradeOrder] = useState({
+        stockCode: 'CELLTRION',
+        quantity: 1,
+    });
+
+    const isSuccess = (data) => {
+        const s = String(data?.status ?? "").toUpperCase();
+        const c = String(data?.code ?? "").toUpperCase();
+        return s === "SUCCESS" || s === "OK" || c === "SUCCESS" || c === "OK" || c === "200";
+    };
+
+    // 1)투자 시작 - 세션 생성
+    const handleStartSimulation = async () => {
+        if (config.initialCapital < 1000000 || config.initialCapital > 10000000) {
+            alert("투자 금액은 100만 원에서 1,000만 원 사이여야 합니다.");
+            return;
+        }
+        if (new Date(config.startDate) >= new Date(config.endDate)) {
+            alert("종료 날짜는 시작 날짜보다 이후여야 합니다.");
+            return;
+        }
+
+        try {
+            const response = await api.post('/simulation/sessions', {
+                initialCapital: config.initialCapital,
+                startDate: config.startDate,
+                endDate: config.endDate
+            });
+
+            console.log("세션 생성 응답:", response.data);
+
+            if (!isSuccess(response.data)) {
+                alert("세션 생성 실패/형식 불일치: " + JSON.stringify(response.data));
+                return;
+            }
+
+            const sessionData = response.data.data;
+            const sid = sessionData?.sessionId;
+            if (!sid) {
+                alert("세션 ID(sessionId)가 없습니다: " + JSON.stringify(sessionData));
+                return;
+            }
+
+            setSession(sessionData);
+            localStorage.setItem("simulationSessionId", String(sid));
+
+            await Promise.all([
+                fetchDayData(sid),
+                fetchPortfolio(sid),
+                fetchTrades(sid)
+            ]);
+
+            await fetchSessions();
+            alert("투자 세션이 시작되었습니다.");
+        } catch (error) {
+            console.error("투자 시작 실패:", error);
+            alert("투자를 시작하지 못했습니다: " + (error.response?.data?.message || error.message || "서버 오류"));
+        }
+    };
+
+    // 리포트 조회 (GET /simulation/sessions/{sessionId}/report)
+    const fetchReport = async (sid) => {
+        if (!sid) return null;
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}/report`);
+            console.log("report:", res.data);
+            if (isSuccess(res.data)) return res.data.data;
+        } catch (e) {
+            console.error("fetchReport error:", e);
+        }
+        return null;
+    };
+
+    // 7. 거래 내역 조회 (GET /simulation/sessions/{sessionId}/trades)
+    const fetchTrades = async (sid) => {
+        if (!sid) return;
+        setTradesLoading(true);
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}/trades`);
+            console.log("trades:", res.data);
+
+            if (isSuccess(res.data)) {
+                setTrades(Array.isArray(res.data.data) ? res.data.data : []);
+            } else {
+                setTrades([]);
+            }
+        } catch (e) {
+            console.error("trades error:", e);
+            setTrades([]);
+        } finally {
+            setTradesLoading(false);
+        }
+    };
+
+    // 내 세션 목록 조회 (GET /simulation/sessions)
+    const fetchSessions = async () => {
+        try {
+            const res = await api.get('/simulation/sessions');
+            if (res.data.status === "SUCCESS" && Array.isArray(res.data.data)) {
+                const list = res.data.data;
+                setSessions(list);
+                return list;
+            }
+        } catch (e) {
+            console.error("세션 목록 로드 실패:", e);
+        }
+        return [];
+    };
+
+    // 세션 상세 조회 (GET /simulation/sessions/{sessionId})
+    const fetchSessionDetail = async (sid) => {
+        if (!sid) return null;
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}`);
+            console.log("session detail:", res.data);
+
+            if (isSuccess(res.data)) {
+                const data = res.data.data;
+                setSession(data); // 최신 세션정보로 갱신
+                return data;
+            }
+        } catch (e) {
+            console.error("fetchSessionDetail error:", e);
+        }
+        return null;
+    };
+
+    // 세션 완료 처리 (PUT /simulation/sessions/{sessionId}/complete)
+    const handleCompleteSession = async () => {
+        const sid = session?.sessionId;
+        if (!sid) return alert("세션이 없습니다.");
+
+        try {
+            const res = await api.put(`/simulation/sessions/${sid}/complete`);
+            console.log("complete session:", res.data);
+
+            if (!isSuccess(res.data)) {
+                alert("세션 완료 처리 실패: " + JSON.stringify(res.data));
+                return;
+            }
+
+            // 완료 처리 후 최신 상태 반영
+            await fetchSessionDetail(sid);
+            await fetchSessions();
+            alert("세션이 완료 처리되었습니다.");
+        } catch (e) {
+            console.error("complete error:", e);
+            alert("세션 완료 처리 중 오류가 발생했습니다.");
+        }
+    };
+
+    // 목록에서 복구할 세션 선택(저장된 sid 우선 → ACTIVE 우선 → 최신)
+    const pickSessionIdToRestore = (list) => {
+        const savedSid = localStorage.getItem("simulationSessionId");
+        if (savedSid && list.some(s => String(s.sessionId) === String(savedSid))) {
+            return Number(savedSid);
+        }
+
+        const active = list.find(s => String(s.status).toUpperCase() === "ACTIVE");
+        if (active) return Number(active.sessionId);
+
+        // 최신 세션(가능하면 createdAt 기준, 없으면 sessionId 큰 것)
+        const sorted = [...list].sort((a, b) => {
+            const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            if (ad !== bd) return bd - ad;
+            return (Number(b.sessionId) || 0) - (Number(a.sessionId) || 0);
+        });
+        return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
+    };
+
+    // sid로 현재 세션 세팅 + 관련 데이터 로딩
+    const restoreSession = async (sid, listForMeta = null) => {
+        if (!sid) return;
+
+        // 목록에서 현재 sid에 해당하는 최신 세션 정보(날짜 등)를 찾아 상태 업데이트
+        const currentSessionInfo = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
+
+        if (currentSessionInfo) {
+            setSession(currentSessionInfo);
+        } else {
+            // 목록에 없을 경우 최소한의 ID 정보라도 유지
+            setSession({ sessionId: sid });
+        }
+
+        localStorage.setItem("simulationSessionId", String(sid));
+
+        // 해당 세션의 상세 데이터(포트폴리오, 거래내역, 일일데이터) 호출
+        await Promise.all([
+            fetchDayData(sid),
+            fetchPortfolio(sid),
+            fetchTrades(sid)
+        ]);
+    };
+
+    const fetchUserInfo = async () => {
+        try {
+            const response = await api.get('/user/me');
+            if (response.data.status === "SUCCESS") {
+                setUserInfo(response.data.data);
+            }
+        } catch (error) { console.error(error); }
+    };
+
+    const fetchDayData = async (sid) => {
+        try {
+            const response = await api.get(`/simulation/sessions/${sid}/daily-data`);
+            console.log("daily-data:", response.data);
+
+            if (isSuccess(response.data)) {
+                setDayData(response.data.data);
+            } else {
+                setDayData(null);
+            }
+        } catch (error) {
+            console.error("Fetch day data error", error);
+            setDayData(null);
+        }
+    };
+    // 내 포트폴리오/잔액 조회 (GET /simulation/sessions/{sessionId}/portfolio)
+    const fetchPortfolio = async (sid) => {
+        try {
+            const response = await api.get(`/simulation/sessions/${sid}/portfolio`);
+            console.log("portfolio:", response.data);
+
+            if (isSuccess(response.data)) {
+                setPortfolio(response.data.data);
+            } else {
+                setPortfolio(null);
+            }
+        } catch (error) {
+            console.error("Portfolio fetch error", error);
+            setPortfolio(null);
+        }
+    };
+
+    // 세션 삭제 (DELETE /simulation/sessions/{sessionId})
+    const handleDeleteSession = async () => {
+        const sid = session?.sessionId;
+        if (!sid) return alert("세션이 없습니다.");
+
+        const ok = window.confirm("정말 이 세션을 삭제할까요?");
+        if (!ok) return;
+
+        try {
+            const res = await api.delete(`/simulation/sessions/${sid}`);
+            console.log("delete session:", res.data);
+
+            if (!isSuccess(res.data)) {
+                alert("세션 삭제 실패: " + JSON.stringify(res.data));
+                return;
+            }
+
+            // 로컬/상태 초기화
+            localStorage.removeItem("simulationSessionId");
+            setSession(null);
+            setDayData(null);
+            setPortfolio(null);
+            setTrades([]);
+
+            // 목록 갱신 후 다른 세션 자동 복구(있다면)
+            const list = await fetchSessions();
+            const nextSid = pickSessionIdToRestore(list);
+            if (nextSid) await restoreSession(nextSid, list);
+
+            alert("세션이 삭제되었습니다.");
+        } catch (e) {
+            console.error("delete error:", e);
+            alert("세션 삭제 중 오류가 발생했습니다.");
+        }
+    };
+
+    // 다음 날짜로 이동 (POST /simulation/sessions/{sessionId}/next-day)
+    const handleNextDay = async () => {
+        if (!session?.sessionId) return alert("먼저 투자를 시작해주세요.");
+
+        try {
+            const response = await api.post(`/simulation/sessions/${session.sessionId}/next-day`);
+            console.log("next-day:", response.data);
+
+            if (isSuccess(response.data)) {
+                setDayData(response.data.data);
+                await Promise.all([
+                    fetchPortfolio(session.sessionId),
+                    fetchTrades(session.sessionId),
+                    fetchSessionDetail(session.sessionId),
+                ]);
+            } else {
+                alert("다음 날짜 진행 실패: " + JSON.stringify(response.data));
+            }
+        } catch (error) {
+            console.error("next-day error:", error);
+            alert("더 이상 진행할 수 있는 날짜가 없습니다.");
+        }
+    };
+
+    // 매수/매도 실행 (POST /simulation/sessions/{sessionId}/trades)
+    const handleTrade = async (type) => {
+        if (!session?.sessionId) return alert("투자가 진행 중이 아닙니다.");
+        try {
+            const response = await api.post(`/simulation/sessions/${session.sessionId}/trades`, {
+                stockCode: tradeOrder.stockCode,
+                tradeType: type,
+                quantity: tradeOrder.quantity,
+                price: 58000 // 현재가(가상)을 적용
+            });
+
+            if (response.data.status === "SUCCESS") {
+                alert(`${tradeOrder.stockCode} ${tradeOrder.quantity}주 ${type === 'BUY' ? '매수' : '매도'} 완료!`);
+                await Promise.all([
+                    fetchPortfolio(session.sessionId),
+                    fetchTrades(session.sessionId),
+                ]);
+            }
+        } catch (error) {
+            alert("거래 실패: " + (error.response?.data?.message || "잔액이나 수량을 확인하세요."));
+        }
+    };
+
+    const handleUpdateInfo = () => {
+        setIsEditing(false);
+        alert("정보가 수정되었습니다.");
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("simulationSessionId");
+        navigate("/login");
+    };
+
     const generateDateOptions = (start, end) => {
         const dates = [];
         let current = new Date(start);
         const stopDate = new Date(end);
-
         while (current <= stopDate) {
             dates.push(current.toISOString().split('T')[0]);
-            current.setDate(current.getDate() + 3); // 3일 단위 증가
+            current.setDate(current.getDate() + 3);
         }
         return dates;
     };
 
     const dateOptions = generateDateOptions('2020-01-01', '2020-03-31');
+
     useEffect(() => {
-        document.title = "NewsPin - Trading Dashboard";
+        (async () => {
+            const token = getAccessToken();
+            if (!token) return navigate("/login");
+
+            await fetchUserInfo();
+
+            // 세션 복구 프로세스
+            const list = await fetchSessions();
+            const savedSid = localStorage.getItem("simulationSessionId");
+
+            if (savedSid && list.length > 0) {
+                // 저장된 ID가 있고 실제 서버 목록에도 존재하는지 확인 후 복구
+                await restoreSession(Number(savedSid), list);
+            } else if (list.length > 0) {
+                // 저장된 ID가 없으면 목록 중 가장 최근(또는 ACTIVE) 세션으로 자동 선택
+                const latestSid = pickSessionIdToRestore(list);
+                if (latestSid) await restoreSession(latestSid, list);
+            }
+        })();
     }, []);
 
     return (
@@ -68,14 +497,13 @@ const Trade = () => {
                         내 정보
                     </button>
                     <span className='font-bold mb-2'>|</span>
-                    <button onClick={() => navigate('/login')} className="hover:underline font-jua cursor-pointer">로그아웃</button>
+                    <button onClick={handleLogout} className="hover:underline font-jua cursor-pointer">로그아웃</button>
                 </div>
             </div>
 
             {/* [메인 컨텐츠 영역] */}
             <div className="w-full max-w-7xl bg-white rounded-xl shadow-2xl p-6 flex flex-col gap-4 border-4 border-gray-400 flex-1 overflow-hidden">
 
-                {/* --- 레이아웃 배치 수정 영역 시작 --- */}
                 <div className="flex flex-1 gap-6 overflow-hidden">
 
                     {/* === [좌측 영역] 투자 설정(상) + 차트(하) === */}
@@ -86,41 +514,50 @@ const Trade = () => {
                             <div className="flex items-center gap-3 mb-3">
                                 <img src={input} alt="input" className='w-8 h-8' />
                                 <h3 className="text-lg font-semibold ">투자 환경 설정</h3>
-                                <button className="flex hover:bg-blue-600 active:scale-[0.90] transition-all bg-blue-400 border-1 border-black cursor-pointer shadow-lg font-semibold text-white text-sm px-2 py-1 rounded-md items-center gap-2">
+
+                                <button onClick={handleStartSimulation} className="flex hover:bg-blue-600 active:scale-[0.90] transition-all bg-blue-400 border-1 border-black cursor-pointer shadow-lg font-semibold text-white text-sm px-2 py-1 rounded-md items-center gap-2">
                                     <img src={start} alt="start" className='w-5 h-5' />
                                     <span>투자 시작</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1 text-sm font-bold">
                                     <img src={earning} alt="earn" className='w-8 h-8' />
-                                    <span>금액 - 최대 1000만원까지</span>
-                                </div>
+                                    <span className='pl-1'>설정 금액:  {config.initialCapital.toLocaleString()}원</span>                                </div>
                             </div>
-                            <div className="flex items-center gap-5 font-jua text-sm">
+                            <div className="flex items-center gap-3 font-jua text-sm">
                                 <span className="font-bold">시작날짜</span>
-                                <select className="border border-gray-400 rounded px-2 w-32 text-center bg-white">
-                                    {dateOptions.map(date => (
-                                        <option key={`start-${date}`} value={date}>{date}</option>
-                                    ))}
+                                <select
+                                    value={config.startDate}
+                                    onChange={(e) => setConfig({ ...config, startDate: e.target.value })}
+                                    className="border border-gray-400 rounded px-1 w-30 text-center bg-white"
+                                >
+                                    {dateOptions.map(date => <option key={`start-${date}`} value={date}>{date}</option>)}
                                 </select>
 
                                 <span className="font-bold">종료날짜</span>
-                                <select className="border border-gray-400 rounded px-2 w-32 text-center bg-white">
-                                    {dateOptions.map(date => (
-                                        <option key={`end-${date}`} value={date}>{date}</option>
-                                    ))}
+                                <select
+                                    value={config.endDate}
+                                    onChange={(e) => setConfig({ ...config, endDate: e.target.value })}
+                                    className="border border-gray-400 rounded px-1 w-30 text-center bg-white"
+                                >
+                                    {dateOptions.map(date => <option key={`end-${date}`} value={date}>{date}</option>)}
                                 </select>
 
                                 <span className="font-bold">금액</span>
                                 {/* p 태그 대신 사용자가 직접 입력 가능한 number 타입 input으로 변경 */}
                                 <input
                                     type="number"
-                                    placeholder="금액 입력"
-                                    className="border border-gray-400 rounded text-right"
+                                    min="1000000"
+                                    max="10000000"
+                                    step="100000"
+                                    value={config.initialCapital}
+                                    onChange={(e) => setConfig({ ...config, initialCapital: Number(e.target.value) })}
+                                    className="border border-gray-400 rounded text-right px-1 w-24"
                                 />
+                                <span className="text-[12px] text-black"> 한도 : 100 ~ 1000만원</span>
                             </div>
                         </div>
 
-                        {/* 3. 차트 정보 및 거래 -> 추후 api 연동 */}
+                        {/* 3. 차트 정보 및 거래 */}
                         <div className="flex-1 border-2 border-gray-300 rounded-lg p-1 flex flex-col bg-white overflow-hidden">
                             <div className="flex justify-between items-center mb-2">
                                 <div className="flex items-center gap-2">
@@ -128,29 +565,23 @@ const Trade = () => {
                                     <h3 className="font-bold text-lg">차트 정보 및 거래</h3>
                                 </div>
                                 <div className="border border-gray-400 rounded-sm px-3 py-1 text-sm font-bold bg-gray-50">
-                                    현재 날짜 : 2021-03-03
+                                    현재 날짜 : {dayData?.simulationDate || '-'}
                                 </div>
                             </div>
 
                             <div className="flex flex-1 gap-2 overflow-hidden mb-1">
                                 <div className="flex-1 border-2 border-slate-700 rounded-lg flex items-end justify-around p-4 bg-gray-50 relative">
-                                    <div className="w-6 bg-green-500 h-[60%] relative"><div className="absolute -top-4 left-1/2 w-px h-[120%] bg-green-500 -translate-x-1/2 -z-0"></div></div>
-                                    <div className="w-6 bg-red-500 h-[40%] relative"><div className="absolute -top-2 left-1/2 w-px h-[140%] bg-red-500 -translate-x-1/2 -z-0"></div></div>
-                                    <div className="w-6 bg-green-500 h-[75%] relative"><div className="absolute -top-6 left-1/2 w-px h-[110%] bg-green-500 -translate-x-1/2 -z-0"></div></div>
-                                    <div className="w-6 bg-red-500 h-[50%] relative"><div className="absolute -top-3 left-1/2 w-px h-[130%] bg-red-500 -translate-x-1/2 -z-0"></div></div>
+                                    {/* 가상 차트 (변동성 시각화) */}
+                                    <div className="w-6 bg-green-500" style={{ height: `${Math.random() * 50 + 30}%` }}></div>
+                                    <div className="w-6 bg-red-500" style={{ height: `${Math.random() * 50 + 20}%` }}></div>
+                                    <div className="w-6 bg-green-500" style={{ height: `${Math.random() * 50 + 40}%` }}></div>
                                 </div>
                                 <div className="w-44 border border-gray-400 rounded p-1 text-[10px] font-jua leading-tight bg-gray-50">
-                                    <p className="font-bold border-b ">← [차트 정보 및 거래 - 정보 개요도]</p>
+                                    <p className="font-bold border-b ">← [정보 개요도]</p>
                                     <ul className="list-disc list-inside space-y-0.5">
-                                        <li>종목명</li>
-                                        <li>주문 가격</li>
-                                        <li>거래 대금</li>
-                                        <li>거래량</li>
-                                        <li>거래 수량</li>
-                                        <li>총 거래 금액</li>
-                                        <li>현재가 및 등락률</li>
-                                        <li>거래 일자 (현재 날짜)</li>
-                                        <li>평가 손익</li>
+                                        <li>수익률: <span className={dayData?.profitRate >= 0 ? 'text-red-500' : 'text-blue-500'}>{dayData?.profitRate || 0}%</span></li>
+                                        <li>총 자산: {dayData?.totalAsset?.toLocaleString() || 0}원</li>
+                                        <li>가용 잔액: {portfolio?.currentCapital?.toLocaleString() || 0}원</li>
                                     </ul>
                                 </div>
                             </div>
@@ -161,7 +592,8 @@ const Trade = () => {
                                         <img src={trade} alt="trade" className='w-7 h-7' />
                                         <span className="font-bold text-xs">매수 / 매도</span>
                                         <span className="text-sm ml-auto font-semibold">잔액
-                                            <span className="border rounded-sm border-gray-400 px-2 py-0.5 ml-1">3,950,000 원</span></span>
+                                            <span className="border rounded-sm border-gray-400 px-2 py-0.5 ml-1">    {portfolio?.currentCapital?.toLocaleString() || 0} 원
+                                            </span></span>
                                     </div>
                                     <div className="text-[13px] font-bold mb-3 mt-1">종목 선택</div>
                                     <div className="flex space-x-3 text-[12px] mb-2">
@@ -220,10 +652,10 @@ const Trade = () => {
                                     <div className="flex w-full justify-between items-center"><span className="font-bold">거래량</span> <div className="flex items-center gap-1"><span className="border border-gray-400 px-4 rounded bg-white">10</span><span>주</span></div></div>
                                     <div className="flex w-full justify-between items-center"><span className="font-bold">총 가격</span> <span className="border border-gray-400 px-4 rounded bg-white font-mono">580,000 원</span></div>
                                     <div className="flex gap-2 w-full mt-2">
-                                        <button className="mt-8 ml-9 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-blue-700 active:scale-[0.90] transition-all bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800"><img src={buy} alt="buy" className='w-8 h-8' />
+                                        <button onClick={() => handleTrade('BUY')} className="mt-8 ml-9 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-blue-700 active:scale-[0.90] transition-all bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800"><img src={buy} alt="buy" className='w-8 h-8' />
                                             <span className='mt-2 text-[16px] ml-1'>매수</span>
                                         </button>
-                                        <button className="mt-8 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-red-700 active:scale-[0.90] transition-all bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700">
+                                        <button onClick={() => handleTrade('SELL')} className="mt-8 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-red-700 active:scale-[0.90] transition-all bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700">
                                             <img src={selling} alt="sell" className='w-8 h-8' />
                                             <span className='mt-2 text-[16px] ml-1'>매도</span>
                                         </button>
@@ -244,52 +676,60 @@ const Trade = () => {
                                 <span className="text-sm font-bold ml-auto truncate">코로나19에도 '위기가 곧 기회' 외친 국내 제약사들</span>
                             </div>
                             <div className="border border-gray-400 rounded-lg p-3 flex-1 overflow-y-auto text-xs leading-relaxed font-jua">
-                                <div className="flex gap-4 mb-3 pb-2">
-                                    <div className="w-full md:w-1/3 border-2 border-gray-300 rounded-lg flex items-center justify-center p-4 h-full bg-gray-50">
-                                        <div className="text-2xl font-bold flex items-center">
-                                            <span className="text-green-600 uppercase">GC Biopharma</span>
+                                {dayData?.todayNews?.length > 0 ? (
+                                    dayData.todayNews.map((news) => (
+                                        <div key={news.newsId} className="mb-4 border-b pb-2">
+                                            <h4 className="font-bold text-sm text-blue-800">[{news.eventType}] {news.title}</h4>
+                                            <p className="text-xs mt-1 text-gray-700 line-clamp-3">{news.content}</p>
+                                            <div className="text-[10px] text-gray-400 mt-1">출처: {news.source} | 감성: {news.sentiment}</div>
                                         </div>
-                                    </div>
-                                    <p className="font-bold text-lg mt-2">국내 주요 제약사들이 2021년 신축년 새해 다짐을 예년과 달리 온라인으로 간소화했지만 혁신과 성장을 향한 외침에는 변함이 없었다.</p>
-                                </div>
-                                <p className="mb-3">국내 주요 제약사들이 2021년 신축년 새해 다짐을 예년과 달리 별도의 행사 없이 온라인으로 간소화했지만 혁신과 성장을 위한 외침에는 변함이 없었다.</p>
-                                <p className="mb-3">지난해에 이어 올해도 코로나19(COVID-19) 팬데믹이 여전하지만 '위기가 곧 기회'라는 자세로 성장동력 발굴, 스마트 경영, 제약강국 실현 등의 의지 다진 것이다.</p>
-                                <p className="mb-3">단, 코로나19의 여파로 대부분의 제약사가 온라인으로 신년인사를 대체한 것이 올해 시무식 공통적인 특징이다. GC녹십자는 '어려울 때 꼭 필요한 회사가 되자'는 다짐을 통해 올해 첫 근무를 시작했다.</p>
-                                <p>GC녹십자 허은철 사장은 "예고 없이 찾아오는 위기에 대응하고 기회를 놓치지 않기 위해 늘 성실히 준비하는 행동을 바탕으로 내실 있는 회사가 돼야 한다"며 "포스트 코로나 시대를 대비하고 시대적 요청에 부응하는 회사가 되도록 항상 깨어 있어야 한다"고 강조했다.</p>
+                                    ))
+                                ) : (
+                                    <p className="text-gray-400 text-center mt-10">진행 중인 뉴스가 없습니다.</p>)}
                             </div>
                         </div>
 
                         {/* 4. 투자 결과 및 피드백 -> 추후 api 연동 */}
-                        <div className="flex-0.8 border-2 border-gray-400 rounded-lg p-2 bg-white flex flex-col overflow-hidden">
-                            <div className="flex items-center gap-2 mb-2">
-                                <img src={review} alt="review" className='w-10 h-10' />
-                                <h3 className="font-bold text-lg">투자 결과 및 피드백</h3>
-                            </div>
-                            <div className="border border-gray-400 rounded-lg p-3 flex-1 overflow-y-auto text-[11px] leading-snug font-jua space-y-2">
-                                <p><span className="font-bold text-blue-700">뉴스 감성 vs 시장 현실:</span> GC녹십자의 신년사는 '위기 극복 및 성장 의지'라는 장기적 호재성 메시지를 담았으나, 당시 시장은 연말 급등에 대한 부담을 반영한 것으로 분석됩니다.</p>
-                                <hr />
-                                <p><span className="font-bold text-green-700">학습 교훈:</span> 제약/바이오 업종은 경영 비전보다 임상 결과, 백신/치료제 개발 진척도 등 단기 재료에 더 민감하게 반응합니다.</p>
-                                <hr />
-                                <p><span className="font-bold text-orange-600">다음 투자 제언:</span> 이 뉴스의 장기적 비전이 실제로 실현되는지 확인하기 위해 3개월 또는 6개월 후의 주가 변화를 재검증하거나 관련 연구 성과 기사를 찾아보세요.</p>
+                        <div className="h-48 border-2 border-gray-400 rounded-lg p-3 bg-white flex flex-col overflow-hidden">
+                            <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                                <img src={review} className="w-6" /> 투자 가이드
+                            </h3>
+                            <div className="flex-1 overflow-y-auto text-xs font-jua bg-yellow-50 p-2 rounded">
+                                {dayData ? (
+                                    <p>💡 <b>{dayData.simulationDate}</b> 기준 분석: 뉴스 감성이 <b>{dayData.todayNews?.[0]?.sentiment || '중립'}</b>적입니다. 시장 상황을 고려하여 {dayData.profitRate < 0 ? '추가 매수' : '익절'}를 검토해보세요.</p>
+                                ) : (
+                                    <p>투자를 시작하면 AI 분석 가이드가 제공됩니다.</p>
+                                )}
                             </div>
                         </div>
                     </div>
-
                 </div>
-                {/* --- 레이아웃 배치 수정 영역 끝 --- */}
 
                 {/* 최하단 네비게이션 버튼 바 (위치 유지) */}
                 <div className="flex justify-between items-center px-4 pt-2 border-t mt-auto shrink-0 font-jua">
                     <div className="flex gap-3">
-                        <button className="cursor-pointer bg-sky-500 text-white hover:bg-amber-200 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
-                            <span className="text-lg">📅</span> 다음 날짜
+                        <button onClick={handleNextDay} className="cursor-pointer bg-sky-500 text-white hover:bg-amber-200 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
+                            <img src={schedule} alt="다음 날짜" className="w-5 h-5" />
+                            <p className="text-lg">다음 날짜</p>
                         </button>
                         <button onClick={() => navigate('/main')} className="cursor-pointer hover:bg-blue-700 active:scale-[0.90] transition-all bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-violet-500">
-                            <span className="text-lg">🏠</span> 메인 화면 이동
+                            <img src={house} alt="메인 화면 이동" className="w-5 h-5" />
+                            <p className="text-lg">메인 화면</p>
+                        </button>
+                        <button onClick={handleCompleteSession} className="cursor-pointer bg-green-500 text-white hover:bg-green-400 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
+                            <img src={completion} alt="세션 종료" className="w-5 h-5" />
+                            <p className="text-lg">세션 종료</p>
+                        </button>
+
+                        <button onClick={handleDeleteSession} className="cursor-pointer bg-red-500 text-white hover:bg-red-300 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
+                            <img src={stop} alt="세션 삭제" className="w-5 h-5" />
+                            <p className="text-lg">세션 삭제</p>
                         </button>
                     </div>
+
+
                     <div className="flex gap-3">
-                        <button className="bg-slate-700 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-gray-400 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md">
+                        <button onClick={() => navigate(`/report/${session?.sessionId}`)} className="bg-slate-700 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-gray-400 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md">
                             <span className="text-lg">📊</span> 투자 결과 및 피드백
                         </button>
                         <button onClick={() => navigate('/portfolio')} className="bg-blue-600 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-blue-600 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md hover:bg-blue-800">
@@ -298,34 +738,86 @@ const Trade = () => {
                     </div>
                 </div>
 
-                {/* 내 정보 모달 UI 유지 */}
+                {/* [내 정보 모달] - API 연동 반영 */}
                 {isProfileModalOpen && (
                     <div className="fixed inset-0 bg-white/60 flex justify-center items-center z-50">
                         <div className="bg-white rounded-3xl p-10 w-[500px] shadow-2xl flex flex-col font-jua">
                             <h2 className="text-5xl text-center mb-8">내 정보</h2>
+
                             <div className="space-y-6 mb-8 text-2xl">
+                                {/* 아이디 필드 */}
                                 <div>
                                     <label className="block mb-2">아이디</label>
-                                    <input type="text" value="investingTrade" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
+                                    <input
+                                        type="text"
+                                        value={isEditing ? editData.userId : userInfo.userId}
+                                        onChange={(e) => setEditData({ ...editData, userId: e.target.value })}
+                                        readOnly={!isEditing}
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                    />
                                 </div>
-                                <div>
-                                    <label className="block mb-2">비밀번호</label>
-                                    <input type="password" value="password123" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
-                                </div>
+
+                                {/* 이메일 필드 */}
                                 <div>
                                     <label className="block mb-2">이메일</label>
-                                    <input type="email" value="newsanalyst35144@gmail.com" readOnly className="w-full border-2 border-black rounded-xl p-3 bg-white font-serif italic font-bold" />
+                                    <input
+                                        type="email"
+                                        value={isEditing ? editData.email : userInfo.email}
+                                        onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                                        readOnly={!isEditing}
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                    />
                                 </div>
+
+                                {/* 비밀번호 필드: lucide icon 토글 적용 */}
+                                <div>
+                                    <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+
+                                            // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
+                                            value={isEditing ? editData.password
+                                                : userInfo.password}
+
+                                            onChange={(e) => setEditData({ ...editData, password: e.target.value })}
+                                            readOnly={!isEditing}
+                                            placeholder={isEditing ? "새 비밀번호 입력" : ""}
+                                            className={`w-full border-2 border-black rounded-xl p-3 font-jua pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
+                                        />
+                                        {/* 수정 중이 아닐 때도 비밀번호를 볼 수 있도록 버튼 상시 활성화 */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
+                                        >
+                                            {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
+                                        </button>
+                                    </div>
+                                </div>
+
                             </div>
+
                             <hr className="border-gray-300 mb-8" />
+
                             <div className="flex gap-4 space-x-6">
-                                <button className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white text-2xl cursor-pointer py-2 rounded-xl flex items-center justify-center gap-2 hover:indigo-700">
-                                    <img src={correction} alt="correct" className='w-12' />
-                                    <span>수정하기</span>
-                                </button>
-                                <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[2rem] border-solid border-white py-2 rounded-xl flex items-center justify-center gap-2 hover:indigo-700">
-                                    <img src={logout} alt="logout" className='w-12' />
-                                    <span>닫기</span>
+                                {isEditing ? (
+                                    <button onClick={handleUpdateInfo} className="flex-1 bg-sky-500 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-sky-600">
+                                        <img src={save} alt="save" className='w-12' />
+                                        <span>저장하기</span>
+                                    </button>
+                                ) : (
+                                    <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
+                                        <img src={correction} alt="correct" className='w-12' />
+                                        <span>수정하기</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => { setIsProfileModalOpen(false); setIsEditing(false); setShowPassword(false); }}
+                                    className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
+                                >
+                                    <img src={logout} alt="logout" className='w-13' />
+                                    <span>메인 페이지로</span>
                                 </button>
                             </div>
                         </div>
@@ -335,5 +827,4 @@ const Trade = () => {
         </div>
     );
 };
-
 export default Trade;

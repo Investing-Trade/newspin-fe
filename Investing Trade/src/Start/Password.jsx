@@ -37,59 +37,43 @@ const Password = () => {
     setIsSubmitting(true);
     try {
       if (!isCodeSent) {
-        // 1단계: 인증 코드 발송
-        // [참고] 서버가 409를 뱉는다면 이메일이 실제 전송되지 않을 확률이 큽니다.
-        // 백엔드에 '비밀번호 재설정용 발송 API'를 따로 만들어달라고 요청하는 것이 가장 정확합니다.
+        // 1단계: 회원가입용 인증 발송 API를 사용하여 403 에러 회피
         const response = await axios.post('/user/email/send-verification', null, {
           params: { email: data.email }
         });
 
-        if (response.data.status.toLowerCase() === "success" || response.data.code === "200") {
+        if (response.data.status.toLowerCase() === "success") {
           alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
           setIsCodeSent(true);
         }
       } else {
         // 2단계: 코드 검증 및 새로운 비밀번호로 변경
-        const verifyRes = await axios.post('/user/email/verify', {
+        const response = await axios.post('/user/password/reset', {
           email: data.email,
-          code: data.authCode
+          code: data.authCode,
+          newPassword: data.newPassword
         });
 
-        if (verifyRes.data.status.toLowerCase() === "success" && verifyRes.data.data?.verified) {
-          // [수정] 실제 비밀번호를 업데이트하는 PATCH API 호출 (명세서 기반)
-          const resetRes = await axios.patch('/user/password', {
-            email: data.email,
-            authCode: data.authCode,
-            newPassword: data.newPassword
-          });
-
-          if (resetRes.data.status.toLowerCase() === "success") {
-            alert("비밀번호가 성공적으로 변경되었습니다. 로그인 페이지로 이동합니다.");
-            navigate('/login');
-          } else {
-            alert(resetRes.data.message || "비밀번호 변경 실패");
-          }
+        if (response.data.status.toLowerCase() === "success") {
+          alert("비밀번호가 성공적으로 변경되었습니다. 로그인 페이지로 이동합니다.");
+          navigate('/login');
         } else {
-          alert("인증 코드가 일치하지 않습니다.");
+          alert(response.data.message || "비밀번호 재설정에 실패했습니다.");
         }
       }
     } catch (error) {
       const errorData = error.response?.data;
-      
-      // [핵심 수정] 409 Conflict(U002) 발생 시 처리 로직
-      // 비밀번호 찾기 상황에서는 '이미 존재하는 이메일'이 성공 조건이므로 UI를 넘겨줍니다.
+      console.error("Error Detail:", errorData);
+
+      // 409 Conflict(U002) 발생 시 처리 로직
       if (!isCodeSent && (error.response?.status === 409 || errorData?.code === 'U002')) {
-        /* 주의: 백엔드에서 409 에러 시 이메일 발송 명령 자체를 취소한다면 
-          UI만 넘어가고 실제로 메일은 오지 않을 수 있습니다. 
-          이 경우 백엔드 개발자에게 '비밀번호 재설정용 이메일 발송 허용'을 요청해야 합니다.
-        */
+
         alert("계정 확인이 완료되었습니다. 메일함으로 발송된 인증번호를 입력해주세요.");
-        setIsCodeSent(true); 
+        setIsCodeSent(true);
       } else {
         const serverMessage = errorData?.message || "통신 중 오류가 발생했습니다.";
         alert(serverMessage);
       }
-      console.error("Error Detail:", errorData);
     } finally {
       setIsSubmitting(false);
     }
