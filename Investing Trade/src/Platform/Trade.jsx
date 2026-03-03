@@ -22,6 +22,10 @@ import globe from '../assets/globe.png';
 import axios from 'axios';
 import save from '../assets/save.png';
 import { Eye, EyeOff } from 'lucide-react';
+import completion from '../assets/completion.png';
+import stop from '../assets/stop-sign.png';
+import house from '../assets/house.png';
+import schedule from '../assets/schedule.png';
 
 const api = axios.create({
     baseURL: "http://52.78.151.56:8080",
@@ -166,6 +170,19 @@ const Trade = () => {
         }
     };
 
+    // 리포트 조회 (GET /simulation/sessions/{sessionId}/report)
+    const fetchReport = async (sid) => {
+        if (!sid) return null;
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}/report`);
+            console.log("report:", res.data);
+            if (isSuccess(res.data)) return res.data.data;
+        } catch (e) {
+            console.error("fetchReport error:", e);
+        }
+        return null;
+    };
+
     // 7. 거래 내역 조회 (GET /simulation/sessions/{sessionId}/trades)
     const fetchTrades = async (sid) => {
         if (!sid) return;
@@ -200,6 +217,48 @@ const Trade = () => {
             console.error("세션 목록 로드 실패:", e);
         }
         return [];
+    };
+
+    // 세션 상세 조회 (GET /simulation/sessions/{sessionId})
+    const fetchSessionDetail = async (sid) => {
+        if (!sid) return null;
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}`);
+            console.log("session detail:", res.data);
+
+            if (isSuccess(res.data)) {
+                const data = res.data.data;
+                setSession(data); // 최신 세션정보로 갱신
+                return data;
+            }
+        } catch (e) {
+            console.error("fetchSessionDetail error:", e);
+        }
+        return null;
+    };
+
+    // 세션 완료 처리 (PUT /simulation/sessions/{sessionId}/complete)
+    const handleCompleteSession = async () => {
+        const sid = session?.sessionId;
+        if (!sid) return alert("세션이 없습니다.");
+
+        try {
+            const res = await api.put(`/simulation/sessions/${sid}/complete`);
+            console.log("complete session:", res.data);
+
+            if (!isSuccess(res.data)) {
+                alert("세션 완료 처리 실패: " + JSON.stringify(res.data));
+                return;
+            }
+
+            // 완료 처리 후 최신 상태 반영
+            await fetchSessionDetail(sid);
+            await fetchSessions();
+            alert("세션이 완료 처리되었습니다.");
+        } catch (e) {
+            console.error("complete error:", e);
+            alert("세션 완료 처리 중 오류가 발생했습니다.");
+        }
     };
 
     // 목록에서 복구할 세션 선택(저장된 sid 우선 → ACTIVE 우선 → 최신)
@@ -287,19 +346,62 @@ const Trade = () => {
         }
     };
 
+    // 세션 삭제 (DELETE /simulation/sessions/{sessionId})
+    const handleDeleteSession = async () => {
+        const sid = session?.sessionId;
+        if (!sid) return alert("세션이 없습니다.");
+
+        const ok = window.confirm("정말 이 세션을 삭제할까요?");
+        if (!ok) return;
+
+        try {
+            const res = await api.delete(`/simulation/sessions/${sid}`);
+            console.log("delete session:", res.data);
+
+            if (!isSuccess(res.data)) {
+                alert("세션 삭제 실패: " + JSON.stringify(res.data));
+                return;
+            }
+
+            // 로컬/상태 초기화
+            localStorage.removeItem("simulationSessionId");
+            setSession(null);
+            setDayData(null);
+            setPortfolio(null);
+            setTrades([]);
+
+            // 목록 갱신 후 다른 세션 자동 복구(있다면)
+            const list = await fetchSessions();
+            const nextSid = pickSessionIdToRestore(list);
+            if (nextSid) await restoreSession(nextSid, list);
+
+            alert("세션이 삭제되었습니다.");
+        } catch (e) {
+            console.error("delete error:", e);
+            alert("세션 삭제 중 오류가 발생했습니다.");
+        }
+    };
+
     // 다음 날짜로 이동 (POST /simulation/sessions/{sessionId}/next-day)
     const handleNextDay = async () => {
         if (!session?.sessionId) return alert("먼저 투자를 시작해주세요.");
+
         try {
             const response = await api.post(`/simulation/sessions/${session.sessionId}/next-day`);
-            if (response.data.status === "SUCCESS") {
+            console.log("next-day:", response.data);
+
+            if (isSuccess(response.data)) {
                 setDayData(response.data.data);
                 await Promise.all([
                     fetchPortfolio(session.sessionId),
                     fetchTrades(session.sessionId),
+                    fetchSessionDetail(session.sessionId),
                 ]);
+            } else {
+                alert("다음 날짜 진행 실패: " + JSON.stringify(response.data));
             }
         } catch (error) {
+            console.error("next-day error:", error);
             alert("더 이상 진행할 수 있는 날짜가 없습니다.");
         }
     };
@@ -607,12 +709,25 @@ const Trade = () => {
                 <div className="flex justify-between items-center px-4 pt-2 border-t mt-auto shrink-0 font-jua">
                     <div className="flex gap-3">
                         <button onClick={handleNextDay} className="cursor-pointer bg-sky-500 text-white hover:bg-amber-200 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
-                            <span className="text-lg">📅</span> 다음 날짜
+                            <img src={schedule} alt="다음 날짜" className="w-5 h-5" />
+                            <p className="text-lg">다음 날짜</p>
                         </button>
                         <button onClick={() => navigate('/main')} className="cursor-pointer hover:bg-blue-700 active:scale-[0.90] transition-all bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-violet-500">
-                            <span className="text-lg">🏠</span> 메인 화면 이동
+                            <img src={house} alt="메인 화면 이동" className="w-5 h-5" />
+                            <p className="text-lg">메인 화면</p>
+                        </button>
+                        <button onClick={handleCompleteSession} className="cursor-pointer bg-green-500 text-white hover:bg-green-400 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
+                            <img src={completion} alt="세션 종료" className="w-5 h-5" />
+                            <p className="text-lg">세션 종료</p>
+                        </button>
+
+                        <button onClick={handleDeleteSession} className="cursor-pointer bg-red-500 text-white hover:bg-red-300 active:scale-[0.90] transition-all px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:bg-cyan-400">
+                            <img src={stop} alt="세션 삭제" className="w-5 h-5" />
+                            <p className="text-lg">세션 삭제</p>
                         </button>
                     </div>
+
+
                     <div className="flex gap-3">
                         <button onClick={() => navigate(`/report/${session?.sessionId}`)} className="bg-slate-700 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-gray-400 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md">
                             <span className="text-lg">📊</span> 투자 결과 및 피드백
