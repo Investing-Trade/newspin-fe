@@ -185,22 +185,13 @@ const Portfolio = () => {
                             </div>
 
                             {/* 액션 버튼 그룹 */}
-                            <div className="w-50 flex flex-col gap-8 mt-10">
-
-                                <button className="flex p-2 bg-red-600 cursor-pointer space-x-2 hover:bg-rose-700 text-white rounded-lg items-center border-2 border-gray-400 justify-center transition-all active:scale-95 shadow-lg">
-                                    <img src={reset} alt="reset" className='w-7 h-7' />
-                                    <span className="text-xl font-jua">투자 중단</span>
-                                </button>
-                                <button className="flex p-2 bg-yellow-400 cursor-pointer space-x-2 hover:bg-yellow-500 text-white rounded-lg items-center border-2 border-gray-400 justify-center transition-all active:scale-95 shadow-lg">
-                                    <img src={checklist} alt="checklist" className='w-7 h-7' />
-                                    <span className="text-xl font-jua">투자 완료</span>
-                                </button>
+                            <div className="w-50 flex flex-col gap-16 mt-10">
                                 <button onClick={() => navigate('/trade')} className="flex p-2 space-x-2 bg-green-500 cursor-pointer hover:bg-green-800 border-2 border-gray-400 text-white rounded-lg items-center justify-center transition-all active:scale-95 shadow-lg">
-                                    <img src={setting} alt="stock" className='w-7 h-7' />
+                                    <img src={setting} alt="stock" className='w-7 h-12' />
                                     <span className="text-xl font-jua">모의 투자로 이동</span>
                                 </button>
                                 <button onClick={() => navigate('/main')} className="flex space-x-2 p-2 bg-blue-600 cursor-pointer hover:bg-cyan-700 border-2 border-gray-400 text-white rounded-lg items-center justify-center transition-all active:scale-95 shadow-lg">
-                                    <img src={stocks} alt="stock" className='w-7 h-7' />
+                                    <img src={stocks} alt="stock" className='w-7 h-12' />
                                     <span className="text-xl font-jua">메인으로 이동</span>
                                 </button>
                             </div>
