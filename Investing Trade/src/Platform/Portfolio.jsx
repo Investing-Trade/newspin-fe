@@ -2,7 +2,8 @@ import businessMan from '../assets/bussiness-man.png';
 import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
 import logout from '../assets/logout.png';
 import correction from '../assets/correction-tape.png';
 import dashboard from '../assets/dashboard.png';
@@ -17,25 +18,442 @@ import setting from '../assets/stock-market.png';
 import process from '../assets/data-processing.png';
 import clock from '../assets/clock.png';
 import calendar from '../assets/calendar.png';
-import reset from '../assets/reset.png';
 import stocks from '../assets/stock-exchange.png';
-import checklist from '../assets/checklist.png';
+
+import axios from 'axios';
+import save from '../assets/save.png';
+import { Eye, EyeOff } from 'lucide-react';
+
+const api = axios.create({
+    baseURL: "http://52.78.151.56:8080",
+    withCredentials: false,
+});
+
+api.interceptors.request.use((config) => {
+    const token = getAccessToken();
+    if (token) {
+        config.headers = config.headers ?? {};
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+// ✅ 서버 응답이 { status: "success", code: "200" } 형태인 것 같아서 그 기준으로 처리
+const isSuccess = (data) => {
+    if (!data) return false;
+
+    // status: "success" / "SUCCESS" 등 대응
+    if (typeof data.status === "string" && data.status.toLowerCase() === "success") return true;
+
+    // code가 "200" 문자열이거나 200 숫자인 케이스 대응
+    if (data.code === 200 || data.code === "200") return true;
+
+    // success: true 같은 형태까지 대응(있으면)
+    if (data.success === true) return true;
+
+    return false;
+};
+
+const getAccessToken = () => {
+    const raw = localStorage.getItem("accessToken");
+    if (!raw) return null;
+
+    const normalize = (t) => {
+        if (!t) return null;
+        const s = String(t).trim();
+        return s.toLowerCase().startsWith("bearer ") ? s.slice(7).trim() : s;
+    };
+
+    try {
+        if (raw.startsWith('"') || raw.startsWith("{") || raw.startsWith("[")) {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed === "string") return normalize(parsed);
+
+            return normalize(
+                parsed?.accessToken ??
+                parsed?.access_token ??
+                parsed?.token ??
+                parsed?.data?.accessToken ??
+                parsed?.data?.token
+            );
+        }
+        return normalize(raw);
+    } catch {
+        return normalize(raw);
+    }
+};
 
 const Portfolio = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-    const sections = [
-        { title: '바이오', icon: bio, stocks: [{ name: '삼성바이오로직스', count: '10주', buy: '38,000', current: '48,800', profit: '+108,000' }, { name: '유한양행', profit: '0' }, { name: '한미약품', profit: '0' }, { name: '셀트리온', profit: '0' }] },
-        { title: 'IT/테크', icon: it, stocks: [{ name: '삼성전자', profit: '0' }, { name: '네이버', profit: '0' }, { name: 'LG CNS', profit: '0' }, { name: '삼성 SDS', profit: '0' }] },
-        { title: '유통', icon: distribution, stocks: [{ name: 'SM 엔터테인먼트', profit: '0' }, { name: '롯데쇼핑', profit: '0' }, { name: '쇼박스', profit: '0' }, { name: '하이브', profit: '0' }] },
-        { title: '여행', icon: plane, stocks: [{ name: '신세계푸드', profit: '0' }, { name: '교촌 F&B', profit: '0' }, { name: '더본코리아', profit: '0' }, { name: 'SPC 삼립', profit: '0' }] },
-        { title: '외식/프랜차이즈', icon: cutlery, stocks: [{ name: '신세계푸드', profit: '0' }, { name: '교촌 F&B', profit: '0' }, { name: '더본코리아', profit: '0' }, { name: 'SPC 삼립', profit: '0' }] },
-        { title: '문화/엔터테인먼트', icon: enter, stocks: [{ name: '신세계푸드', profit: '0' }, { name: '교촌 F&B', profit: '0' }, { name: '더본코리아', profit: '0' }, { name: 'SPC 삼립', profit: '0' }] }
-    ];
+    // ===== 내 정보 모달 상태(기존 UI 유지 위해 추가) =====
+    const [isEditing, setIsEditing] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
+    const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
+
+    // ===== 시뮬레이션/포트폴리오/거래내역 상태 =====
+    const [sessions, setSessions] = useState([]);
+    const [session, setSession] = useState(null);        // 세션 상세/메타
+    const [portfolio, setPortfolio] = useState(null);    // 잔고 + 보유종목(가능하면)
+    const [dayData, setDayData] = useState(null);        // 현재 날짜(가능하면)
+    const [trades, setTrades] = useState([]);
+
+    // ===== 카테고리/종목 메타(Trade 페이지와 동일한 코드 기준으로 매핑) =====
+    const STOCK_META = useMemo(() => ({
+        bio: {
+            title: '바이오',
+            icon: bio,
+            items: [
+                { name: '셀트리온', code: 'CELLTRION' },
+                { name: '한미약품', code: 'HANMI' },
+                { name: '유한양행', code: 'YUHAN' },
+                { name: '삼성바이오로직스', code: 'SAMSUNG_BIO' },
+            ],
+        },
+        it: {
+            title: 'IT/테크',
+            icon: it,
+            items: [
+                { name: '네이버', code: 'NAVER' },
+                { name: '카카오', code: 'KAKAO' },
+                { name: '삼성전자', code: 'SAMSUNG_ELEC' },
+                { name: 'SK하이닉스', code: 'SK_HYNIX' },
+            ],
+        },
+        distribution: {
+            title: '유통',
+            icon: distribution,
+            items: [
+                { name: '신세계', code: 'SHINSEGAE' },
+                { name: '이마트', code: 'EMART' },
+                { name: '롯데쇼핑', code: 'LOTTE_SHOP' },
+                { name: '신세계푸드', code: 'SHINSEGAE_FOOD' },
+            ],
+        },
+        travel: {
+            title: '여행',
+            icon: plane,
+            items: [
+                { name: '대한항공', code: 'KOREAN_AIR' },
+                { name: '아시아나', code: 'ASIANA' },
+                { name: '하나투어', code: 'HANA_TOUR' },
+                { name: '모두투어', code: 'MODE_TOUR' },
+            ],
+        },
+        franchise: {
+            title: '외식/프랜차이즈',
+            icon: cutlery,
+            items: [
+                { name: '신세계푸드', code: 'SHINSEGAE_FOOD' },
+                { name: 'CJ푸드빌', code: 'CJ_FOODBILL' },
+                { name: 'SPC삼립', code: 'SPC_SAM' },
+                { name: '농심', code: 'NONGSHIM' },
+            ],
+        },
+        entertainment: {
+            title: '문화/엔터테인먼트',
+            icon: enter,
+            items: [
+                { name: 'CGV', code: 'CGV' },
+                { name: 'SM', code: 'SM' },
+                { name: 'JYP', code: 'JYP' },
+                { name: '하이브', code: 'HYBE' },
+            ],
+        },
+    }), []);
+
+    const dday = (end, current) => {
+        if (!end || !current || end === '-' || current === '-') return null;
+
+        const endDate = new Date(end);
+        const currentDate = new Date(current);
+
+        if (isNaN(endDate.getTime()) || isNaN(currentDate.getTime())) return null;
+
+        const diff = endDate.getTime() - currentDate.getTime();
+        return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    };
+
+    const formatMoney = (value) => {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '-';
+        return n.toLocaleString('ko-KR');
+    };
+
+    const codeToName = useMemo(() => {
+        const map = {};
+        Object.values(STOCK_META).forEach(sec => {
+            sec.items.forEach(i => { map[i.code] = i.name; });
+        });
+        return map;
+    }, [STOCK_META]);
+
+    const nameToCode = useMemo(() => {
+        const map = {};
+        Object.values(STOCK_META).forEach(sec => {
+            sec.items.forEach(i => { map[i.name] = i.code; });
+        });
+        return map;
+    }, [STOCK_META]);
+
+    // ===== API 함수들 =====
+    const fetchUserInfo = async () => {
+        try {
+            const res = await api.get('/user/me');
+            if (isSuccess(res.data)) {
+                setUserInfo(res.data.data ?? { userId: '', email: '', password: '****' });
+            }
+        } catch (e) {
+            console.error("fetchUserInfo error:", e);
+        }
+    };
+
+    const fetchSessions = async () => {
+        try {
+            const res = await api.get('/simulation/sessions');
+            if (isSuccess(res.data) && Array.isArray(res.data.data)) {
+                setSessions(res.data.data);
+                return res.data.data;
+            }
+        } catch (e) {
+            console.error("fetchSessions error:", e);
+        }
+        return [];
+    };
+
+    const fetchSessionDetail = async (sid) => {
+        if (!sid) return null;
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}`);
+            if (isSuccess(res.data)) {
+                setSession(res.data.data);
+                return res.data.data;
+            }
+        } catch (e) {
+            console.error("fetchSessionDetail error:", e);
+        }
+        return null;
+    };
+
+    const fetchDayData = async (sid) => {
+        if (!sid) return null;
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}/daily-data`);
+            if (isSuccess(res.data)) {
+                setDayData(res.data.data);
+                return res.data.data;
+            }
+        } catch (e) {
+            console.error("fetchDayData error:", e);
+        }
+        setDayData(null);
+        return null;
+    };
+
+    const fetchPortfolio = async (sid) => {
+        if (!sid) return null;
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}/portfolio`);
+            if (isSuccess(res.data)) {
+                setPortfolio(res.data.data);
+                return res.data.data;
+            }
+        } catch (e) {
+            console.error("fetchPortfolio error:", e);
+        }
+        setPortfolio(null);
+        return null;
+    };
+
+    const fetchTrades = async (sid) => {
+        if (!sid) return [];
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}/trades`);
+            if (isSuccess(res.data)) {
+                const list = Array.isArray(res.data.data) ? res.data.data : [];
+                setTrades(list);
+                return list;
+            }
+        } catch (e) {
+            console.error("fetchTrades error:", e);
+        }
+        setTrades([]);
+        return [];
+    };
+
+    const pickSessionIdToRestore = (list) => {
+        const savedSid = localStorage.getItem("simulationSessionId");
+        if (savedSid && list.some(s => String(s.sessionId) === String(savedSid))) return Number(savedSid);
+
+        const active = list.find(s => String(s.status).toUpperCase() === "ACTIVE");
+        if (active?.sessionId) return Number(active.sessionId);
+
+        const sorted = [...list].sort((a, b) => {
+            const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            if (ad !== bd) return bd - ad;
+            return (Number(b.sessionId) || 0) - (Number(a.sessionId) || 0);
+        });
+        return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
+    };
+
+    const restoreSession = async (sid, listForMeta = null) => {
+        if (!sid) return;
+        localStorage.setItem("simulationSessionId", String(sid));
+
+        // 목록 기반 세션 메타 먼저 세팅(없으면 최소값)
+        const meta = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
+        if (meta) setSession(meta);
+        else setSession({ sessionId: sid });
+
+        await Promise.all([
+            fetchSessionDetail(sid),
+            fetchDayData(sid),
+            fetchPortfolio(sid),
+            fetchTrades(sid),
+        ]);
+    };
+
+    // ===== 내 정보 수정 저장(현재 서버 API가 명확하지 않아서 UI만 유지) =====
+    const handleUpdateInfo = () => {
+        setIsEditing(false);
+        alert("정보가 수정되었습니다. (현재 서버 저장 API는 미연동 상태입니다)");
+    };
+
+    // ===== 섹션(보유종목) 데이터 구성: API 응답 형태가 달라도 최대한 맞춰서 표시 =====
+    const holdingsMap = useMemo(() => {
+        // 가능한 케이스들을 넓게 수용
+        const rawHoldings =
+            portfolio?.holdings ??
+            portfolio?.positions ??
+            portfolio?.stocks ??
+            portfolio?.items ??
+            [];
+
+        const arr = Array.isArray(rawHoldings) ? rawHoldings : [];
+
+        // key: stockCode
+        const map = {};
+        arr.forEach((h) => {
+            const code = h?.stockCode ?? h?.code ?? nameToCode[h?.name] ?? null;
+            if (!code) return;
+
+            const qty = safeNum(h?.quantity ?? h?.qty ?? h?.count, 0);
+            const cur = safeNum(h?.currentPrice ?? h?.current ?? h?.price ?? h?.marketPrice, 0);
+
+            // 수익(실현/평가) 필드가 없으면 0으로
+            const profit =
+                h?.realizedProfit ??
+                h?.realizedPnl ??
+                h?.pnl ??
+                h?.profit ??
+                0;
+
+            map[code] = {
+                quantity: qty,
+                currentPrice: cur,
+                profit: safeNum(profit, 0),
+            };
+        });
+
+        return map;
+    }, [portfolio, nameToCode]);
+
+    const sections = useMemo(() => {
+        const keys = ["bio", "it", "distribution", "travel", "franchise", "entertainment"];
+        return keys.map((k) => {
+            const sec = STOCK_META[k];
+            return {
+                title: sec.title,
+                icon: sec.icon,
+                stocks: sec.items.map((it) => {
+                    const h = holdingsMap[it.code];
+                    const qty = h?.quantity ?? 0;
+                    const cur = h?.currentPrice ?? 0;
+                    const p = h?.profit ?? 0;
+
+                    const profitText =
+                        p === 0 ? "0" : (p > 0 ? `+${formatMoney(p)}` : `-${formatMoney(Math.abs(p))}`);
+
+                    return {
+                        name: it.name,
+                        count: qty ? `${qty}주` : '-',
+                        current: cur ? formatMoney(cur) : '-',
+                        profit: profitText,
+                    };
+                }),
+            };
+        });
+    }, [STOCK_META, holdingsMap]);
+
+    const tradeRows = useMemo(() => {
+        const arr = Array.isArray(trades) ? [...trades] : [];
+        // 최신순 정렬(가능한 필드들)
+        arr.sort((a, b) => {
+            const at = new Date(a?.tradeDate ?? a?.createdAt ?? a?.date ?? 0).getTime() || 0;
+            const bt = new Date(b?.tradeDate ?? b?.createdAt ?? b?.date ?? 0).getTime() || 0;
+            return bt - at;
+        });
+        return arr.slice(0, 30).map((t) => {
+            const code = t?.stockCode ?? t?.code ?? null;
+            const name = t?.stockName ?? t?.name ?? (code ? (codeToName[code] ?? code) : '-');
+
+            const qty = safeNum(t?.quantity ?? t?.qty, 0);
+            const price = safeNum(t?.price ?? t?.tradePrice ?? t?.amount, 0);
+
+            // 수익 필드가 없으면 '-' 처리
+            const profitVal =
+                t?.profit ??
+                t?.realizedProfit ??
+                t?.realizedPnl ??
+                t?.pnl;
+
+            const profitText =
+                typeof profitVal === "number"
+                    ? (profitVal >= 0 ? `+${formatMoney(profitVal)}` : `-${formatMoney(Math.abs(profitVal))}`)
+                    : (profitVal != null ? String(profitVal) : '-');
+
+            const dateStr = (t?.tradeDate ?? t?.createdAt ?? t?.date ?? '').toString().slice(0, 10) || '-';
+
+            return {
+                name,
+                amount: price ? formatMoney(price) : '-',
+                qty: qty || '-',
+                profitText,
+                profitUp: typeof profitVal === "number" ? profitVal >= 0 : String(profitText).includes('+'),
+                dateStr,
+            };
+        });
+    }, [trades, codeToName]);
+
+    // ===== 투자 환경 표시값(세션/포트폴리오/일자) =====
+    const startDate = session?.startDate ?? session?.period?.startDate ?? '-';
+    const endDate = session?.endDate ?? session?.period?.endDate ?? '-';
+    const initialCapital = session?.initialCapital ?? session?.config?.initialCapital ?? 0;
+    const currentCapital = portfolio?.currentCapital ?? portfolio?.cash ?? portfolio?.balance ?? 0;
+    const currentDate = dayData?.simulationDate ?? session?.simulationDate ?? session?.currentDate ?? '-';
+    const remain = dday(endDate, currentDate);
 
     useEffect(() => {
         document.title = "NewsPin - Portfolio";
+    }, []);
+
+    useEffect(() => {
+        (async () => {
+            const token = getAccessToken();
+            if (!token) return navigate("/login");
+
+            await fetchUserInfo();
+
+            const list = await fetchSessions();
+            if (list.length === 0) return;
+
+            const sid = pickSessionIdToRestore(list);
+            if (sid) await restoreSession(sid, list);
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
@@ -121,7 +539,7 @@ const Portfolio = () => {
                                     <img src={stock} alt="stock-price" className='w-10 h-10' />
                                     <span> 거래 내역 </span>
                                 </h2>
-                                <span className="text-sm text-gray-500 font-medium">최근 30일 기준</span>
+                                <span className="text-sm text-gray-500 font-medium">최근 30건 기준</span>
                             </div>
                             <div className="flex-1 overflow-y-auto">
                                 <table className="w-full text-center border-collapse">
@@ -135,14 +553,21 @@ const Portfolio = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 cursor-pointer">
-                                        <tr className="h-14 hover:bg-gray-100 transition-colors">
-                                            <td className="font-bold text-gray-800">삼성바이오로직스</td>
-                                            <td className="font-mono">53,000</td>
-                                            <td>10</td>
-                                            <td className="text-red-500 font-bold">+490,000</td>
-                                            <td className="text-gray-400 text-xs font-mono">2021-03-03</td>
-                                        </tr>
-                                        <tr className="h-14 text-gray-300 italic"><td colSpan="5">추가 거래 내역이 없습니다.</td></tr>
+                                        {tradeRows.length > 0 ? (
+                                            tradeRows.map((r, i) => (
+                                                <tr key={i} className="h-14 hover:bg-gray-100 transition-colors">
+                                                    <td className="font-bold text-gray-800">{r.name}</td>
+                                                    <td className="font-mono">{r.amount}</td>
+                                                    <td>{r.qty}</td>
+                                                    <td className={`${r.profitText === '-' ? 'text-gray-400' : (r.profitUp ? 'text-red-500' : 'text-blue-500')} font-bold`}>
+                                                        {r.profitText}
+                                                    </td>
+                                                    <td className="text-gray-400 text-xs font-mono">{r.dateStr}</td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr className="h-14 text-gray-300 italic"><td colSpan="5">추가 거래 내역이 없습니다.</td></tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -157,12 +582,16 @@ const Portfolio = () => {
                                 </h3>
                                 <div className="grid grid-cols-2 gap-x-8">
                                     <div className="space-y-2 ml-2 mt-3">
-                                        <p className="text-[15px] text-black">시작 날짜 : 2021-03-01</p>
-                                        <p className="text-[15px] text-black">종료 날짜 : 2021-05-31</p>
+                                        <p className="text-[15px] text-black">시작 날짜 : {startDate}</p>
+                                        <p className="text-[15px] text-black">종료 날짜 : {endDate}</p>
                                         <p className="text-[15px] text-black mt-5">초기 자본 :</p>
-                                        <p className="text-md text-gray-500 mt-2 font-bold underline decoration-yellow-400 underline-offset-4">5,000,000</p>
+                                        <p className="text-md text-gray-500 mt-2 font-bold underline decoration-yellow-400 underline-offset-4">
+                                            {formatMoney(initialCapital)}
+                                        </p>
                                         <p className="text-md text-black mt-5">현재 잔고 :</p>
-                                        <p className="text-lg font-bold text-indigo-600 underline underline-offset-4 decoration-indigo-200">5,490,000</p>
+                                        <p className="text-lg font-bold text-indigo-600 underline underline-offset-4 decoration-indigo-200">
+                                            {formatMoney(currentCapital)}
+                                        </p>
                                     </div>
                                     <div className="text-right space-y-4">
                                         <div className='flex'>
@@ -174,12 +603,15 @@ const Portfolio = () => {
                                             <img src={clock} alt="clock" className='w-10 h-10' />
                                             <p className="text-[20px] font-bold text-black mt-2 ml-4">현재 날짜 </p>
                                         </div>
-                                        <p className="text-[14px] text-black mr-15">시작 날짜 : 2021-03-01</p>
+                                        <p className="text-[14px] text-black mr-15">{currentDate !== '-' ? currentDate : '-'}</p>
+
                                         <div className='flex'>
                                             <img src={calendar} alt="calendar" className='w-10 h-10' />
                                             <p className="text-[20px] font-bold text-black mt-2 ml-4">남은 기간 </p>
                                         </div>
-                                        <p className="text-[20px] text-red-500 mr-25"> D-50</p>
+                                        <p className="text-[20px] text-red-500 mr-25">
+                                            {typeof remain === "number" ? `D-${remain}` : '-'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -200,7 +632,7 @@ const Portfolio = () => {
                 </div>
             </div>
 
-             {/* [내 정보 모달] - API 연동 반영 */}
+            {/* [내 정보 모달] - API 연동 반영 */}
             {isProfileModalOpen && (
                 <div className="fixed inset-0 bg-white/60 flex justify-center items-center z-50">
                     <div className="bg-white rounded-3xl p-10 w-[500px] shadow-2xl flex flex-col font-jua">
@@ -241,7 +673,7 @@ const Portfolio = () => {
                                         // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
                                         value={isEditing ? editData.password
                                             : userInfo.password}
-                                        
+
                                         onChange={(e) => setEditData({ ...editData, password: e.target.value })}
                                         readOnly={!isEditing}
                                         placeholder={isEditing ? "새 비밀번호 입력" : ""}
