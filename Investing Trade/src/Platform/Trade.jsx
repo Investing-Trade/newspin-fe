@@ -25,7 +25,6 @@ import { Eye, EyeOff } from 'lucide-react';
 
 const api = axios.create({
     baseURL: "http://52.78.151.56:8080",
-    // 서버가 쿠키 인증이면 true로 바꾸세요 (지금은 Bearer 쓰는 걸로 보이니 false 유지)
     withCredentials: false,
 });
 
@@ -36,18 +35,14 @@ const getAccessToken = () => {
     const normalize = (t) => {
         if (!t) return null;
         const s = String(t).trim();
-        // 이미 "Bearer xxx"로 저장된 경우 중복 방지
         return s.toLowerCase().startsWith("bearer ") ? s.slice(7).trim() : s;
     };
 
     try {
-        // JSON 문자열/객체로 저장된 경우들 처리
         if (raw.startsWith('"') || raw.startsWith("{") || raw.startsWith("[")) {
             const parsed = JSON.parse(raw);
-
             if (typeof parsed === "string") return normalize(parsed);
 
-            // 가능한 키들 다 방어
             return normalize(
                 parsed?.accessToken ??
                 parsed?.access_token ??
@@ -61,15 +56,11 @@ const getAccessToken = () => {
         return normalize(raw);
     }
 };
+
 api.interceptors.request.use((config) => {
     const token = getAccessToken();
     if (token) {
-        // axios v1: headers가 AxiosHeaders일 수 있음
-        if (config.headers?.set) {
-            config.headers.set("Authorization", `Bearer ${token}`);
-        } else {
-            config.headers = { ...(config.headers || {}), Authorization: `Bearer ${token}` };
-        }
+        config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
 });
@@ -97,6 +88,8 @@ const Trade = () => {
     const [showPassword, setShowPassword] = useState(false);
 
     // API 데이터 상태
+    const [trades, setTrades] = useState([]);      // 거래 내역 목록
+    const [tradesLoading, setTradesLoading] = useState(false);
     const [sessions, setSessions] = useState([]); // 내 시뮬레이션 세션 목록
     const [session, setSession] = useState(null); // 현재 사용 중인 세션
     const [dayData, setDayData] = useState(null); // 현재 날짜의 뉴스 및 자산 정보
@@ -111,13 +104,20 @@ const Trade = () => {
         startDate: '2020-01-01',
         endDate: '2020-03-31'
     });
+
+    // ✅ 종목 및 수량 관리 상태 수정
     const [tradeOrder, setTradeOrder] = useState({
         stockCode: 'CELLTRION',
         quantity: 1,
-        tradeType: 'BUY'
     });
 
-    // 1) 투자 시작 - 세션 생성 (POST /simulation/sessions)
+    const isSuccess = (data) => {
+        const s = String(data?.status ?? "").toUpperCase();
+        const c = String(data?.code ?? "").toUpperCase();
+        return s === "SUCCESS" || s === "OK" || c === "SUCCESS" || c === "OK" || c === "200";
+    };
+
+    // 1)투자 시작 - 세션 생성
     const handleStartSimulation = async () => {
         if (config.initialCapital < 1000000 || config.initialCapital > 10000000) {
             alert("투자 금액은 100만 원에서 1,000만 원 사이여야 합니다.");
@@ -135,27 +135,55 @@ const Trade = () => {
                 endDate: config.endDate
             });
 
-            if (response.data.status === "SUCCESS") {
-                const sessionData = response.data.data;
-                setSession(sessionData);
-                localStorage.setItem("simulationSessionId", String(sessionData.sessionId));
+            console.log("세션 생성 응답:", response.data);
 
-                // 첫날 데이터 자동 로딩
-                await Promise.all([
-                    fetchDayData(sessionData.sessionId),
-                    fetchPortfolio(sessionData.sessionId),
-                ]);
-
-                // 목록도 갱신
-                await fetchSessions();
-
-                alert("투자 세션이 시작되었습니다.");
-            } else {
-                alert(response.data.message || "투자 세션 시작 실패");
+            if (!isSuccess(response.data)) {
+                alert("세션 생성 실패/형식 불일치: " + JSON.stringify(response.data));
+                return;
             }
+
+            const sessionData = response.data.data;
+            const sid = sessionData?.sessionId;
+            if (!sid) {
+                alert("세션 ID(sessionId)가 없습니다: " + JSON.stringify(sessionData));
+                return;
+            }
+
+            setSession(sessionData);
+            localStorage.setItem("simulationSessionId", String(sid));
+
+            await Promise.all([
+                fetchDayData(sid),
+                fetchPortfolio(sid),
+                fetchTrades(sid)
+            ]);
+
+            await fetchSessions();
+            alert("투자 세션이 시작되었습니다.");
         } catch (error) {
-            console.error("Simulation Start Error:", error);
-            alert("투자를 시작하지 못했습니다: " + (error.response?.data?.message || "서버 오류"));
+            console.error("투자 시작 실패:", error);
+            alert("투자를 시작하지 못했습니다: " + (error.response?.data?.message || error.message || "서버 오류"));
+        }
+    };
+
+    // 7. 거래 내역 조회 (GET /simulation/sessions/{sessionId}/trades)
+    const fetchTrades = async (sid) => {
+        if (!sid) return;
+        setTradesLoading(true);
+        try {
+            const res = await api.get(`/simulation/sessions/${sid}/trades`);
+            console.log("trades:", res.data);
+
+            if (isSuccess(res.data)) {
+                setTrades(Array.isArray(res.data.data) ? res.data.data : []);
+            } else {
+                setTrades([]);
+            }
+        } catch (e) {
+            console.error("trades error:", e);
+            setTrades([]);
+        } finally {
+            setTradesLoading(false);
         }
     };
 
@@ -163,13 +191,13 @@ const Trade = () => {
     const fetchSessions = async () => {
         try {
             const res = await api.get('/simulation/sessions');
-            if (res.data.status === "SUCCESS") {
-                const list = Array.isArray(res.data.data) ? res.data.data : [];
+            if (res.data.status === "SUCCESS" && Array.isArray(res.data.data)) {
+                const list = res.data.data;
                 setSessions(list);
                 return list;
             }
         } catch (e) {
-            console.error("Fetch sessions error:", e);
+            console.error("세션 목록 로드 실패:", e);
         }
         return [];
     };
@@ -198,72 +226,85 @@ const Trade = () => {
     const restoreSession = async (sid, listForMeta = null) => {
         if (!sid) return;
 
-        // 목록에 있으면 그 객체를 session으로 넣고(날짜 등 메타 유지), 없으면 최소객체
-        const fromList = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
-        setSession(fromList ? fromList : { sessionId: sid });
+        // 목록에서 현재 sid에 해당하는 최신 세션 정보(날짜 등)를 찾아 상태 업데이트
+        const currentSessionInfo = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
+
+        if (currentSessionInfo) {
+            setSession(currentSessionInfo);
+        } else {
+            // 목록에 없을 경우 최소한의 ID 정보라도 유지
+            setSession({ sessionId: sid });
+        }
 
         localStorage.setItem("simulationSessionId", String(sid));
-        await Promise.all([fetchDayData(sid), fetchPortfolio(sid)]);
+
+        // 해당 세션의 상세 데이터(포트폴리오, 거래내역, 일일데이터) 호출
+        await Promise.all([
+            fetchDayData(sid),
+            fetchPortfolio(sid),
+            fetchTrades(sid)
+        ]);
     };
 
     const fetchUserInfo = async () => {
-        const token = localStorage.getItem('accessToken');
-
-        if (!token) {
-            console.error("인증 토큰이 없습니다. 로그인이 필요합니다.");
-            return;
-        }
-
         try {
             const response = await api.get('/user/me');
             if (response.data.status === "SUCCESS") {
                 setUserInfo(response.data.data);
             }
-        } catch (error) {
-            console.error("User info error", error);
-        }
+        } catch (error) { console.error(error); }
     };
 
     const fetchDayData = async (sid) => {
         try {
             const response = await api.get(`/simulation/sessions/${sid}/daily-data`);
-            if (response.data.status === "SUCCESS") {
-                setDayData(response.data.data);
-            }
+            console.log("daily-data:", response.data);
 
+            if (isSuccess(response.data)) {
+                setDayData(response.data.data);
+            } else {
+                setDayData(null);
+            }
         } catch (error) {
             console.error("Fetch day data error", error);
+            setDayData(null);
         }
-    }
-
-    // 4. 내 포트폴리오/잔액 조회 (GET /simulation/sessions/{sessionId}/portfolio)
+    };
+    // 내 포트폴리오/잔액 조회 (GET /simulation/sessions/{sessionId}/portfolio)
     const fetchPortfolio = async (sid) => {
         try {
             const response = await api.get(`/simulation/sessions/${sid}/portfolio`);
-            if (response.data.status === "SUCCESS") {
+            console.log("portfolio:", response.data);
+
+            if (isSuccess(response.data)) {
                 setPortfolio(response.data.data);
+            } else {
+                setPortfolio(null);
             }
         } catch (error) {
             console.error("Portfolio fetch error", error);
+            setPortfolio(null);
         }
-    }
+    };
 
-    // 5. 다음 날짜로 이동 (POST /simulation/sessions/{sessionId}/next-day)
+    // 다음 날짜로 이동 (POST /simulation/sessions/{sessionId}/next-day)
     const handleNextDay = async () => {
         if (!session?.sessionId) return alert("먼저 투자를 시작해주세요.");
         try {
             const response = await api.post(`/simulation/sessions/${session.sessionId}/next-day`);
             if (response.data.status === "SUCCESS") {
                 setDayData(response.data.data);
-                await fetchPortfolio(session.sessionId);
+                await Promise.all([
+                    fetchPortfolio(session.sessionId),
+                    fetchTrades(session.sessionId),
+                ]);
             }
         } catch (error) {
-            console.error("Next day error", error);
             alert("더 이상 진행할 수 있는 날짜가 없습니다.");
         }
     };
 
-    // 6. 매수/매도 실행 (POST /simulation/sessions/{sessionId}/trades)
+    // 매수/매도 실행 (POST /simulation/sessions/{sessionId}/trades)
     const handleTrade = async (type) => {
         if (!session?.sessionId) return alert("투자가 진행 중이 아닙니다.");
         try {
@@ -271,14 +312,15 @@ const Trade = () => {
                 stockCode: tradeOrder.stockCode,
                 tradeType: type,
                 quantity: tradeOrder.quantity,
-                price: 58000
+                price: 58000 // 현재가(가상)을 적용
             });
 
             if (response.data.status === "SUCCESS") {
                 alert(`${tradeOrder.stockCode} ${tradeOrder.quantity}주 ${type === 'BUY' ? '매수' : '매도'} 완료!`);
-                await fetchPortfolio(session.sessionId);
-            } else {
-                alert(response.data.message || "거래 실패");
+                await Promise.all([
+                    fetchPortfolio(session.sessionId),
+                    fetchTrades(session.sessionId),
+                ]);
             }
         } catch (error) {
             alert("거래 실패: " + (error.response?.data?.message || "잔액이나 수량을 확인하세요."));
@@ -310,32 +352,26 @@ const Trade = () => {
     const dateOptions = generateDateOptions('2020-01-01', '2020-03-31');
 
     useEffect(() => {
-        document.title = "NewsPin - Trading Dashboard";
-
         (async () => {
             const token = getAccessToken();
-            if (!token) {
-                alert("로그인이 필요합니다.");
-                navigate("/login");
-                return;
-            }
+            if (!token) return navigate("/login");
 
             await fetchUserInfo();
 
+            // 세션 복구 프로세스
             const list = await fetchSessions();
-            const sid = pickSessionIdToRestore(list);
+            const savedSid = localStorage.getItem("simulationSessionId");
 
-            if (sid) {
-                await restoreSession(sid, list);
-            } else {
-                setSession(null);
-                setDayData(null);
-                setPortfolio(null);
-                localStorage.removeItem("simulationSessionId");
+            if (savedSid && list.length > 0) {
+                // 저장된 ID가 있고 실제 서버 목록에도 존재하는지 확인 후 복구
+                await restoreSession(Number(savedSid), list);
+            } else if (list.length > 0) {
+                // 저장된 ID가 없으면 목록 중 가장 최근(또는 ACTIVE) 세션으로 자동 선택
+                const latestSid = pickSessionIdToRestore(list);
+                if (latestSid) await restoreSession(latestSid, list);
             }
         })();
     }, []);
-
 
     return (
         <div className="w-full h-screen bg-blue-700 flex flex-col items-center md:p-2 font-agbalumo overflow-hidden">
@@ -427,24 +463,23 @@ const Trade = () => {
                                     <h3 className="font-bold text-lg">차트 정보 및 거래</h3>
                                 </div>
                                 <div className="border border-gray-400 rounded-sm px-3 py-1 text-sm font-bold bg-gray-50">
-                                    현재 날짜 : {dayData ? dayData.simulationDate : session?.currentSimulationDate || '-'}
+                                    현재 날짜 : {dayData?.simulationDate || '-'}
                                 </div>
                             </div>
 
                             <div className="flex flex-1 gap-2 overflow-hidden mb-1">
                                 <div className="flex-1 border-2 border-slate-700 rounded-lg flex items-end justify-around p-4 bg-gray-50 relative">
-                                    {/* 차트 시각화 (Mock) */}
-                                    <div className="w-6 bg-green-500 h-[60%] relative"></div>
-                                    <div className="w-6 bg-red-500 h-[40%] relative"></div>
-                                    <div className="w-6 bg-green-500 h-[75%] relative"></div>
-                                    <div className="w-6 bg-red-500 h-[50%] relative"></div>
+                                    {/* 가상 차트 (변동성 시각화) */}
+                                    <div className="w-6 bg-green-500" style={{ height: `${Math.random() * 50 + 30}%` }}></div>
+                                    <div className="w-6 bg-red-500" style={{ height: `${Math.random() * 50 + 20}%` }}></div>
+                                    <div className="w-6 bg-green-500" style={{ height: `${Math.random() * 50 + 40}%` }}></div>
                                 </div>
                                 <div className="w-44 border border-gray-400 rounded p-1 text-[10px] font-jua leading-tight bg-gray-50">
                                     <p className="font-bold border-b ">← [정보 개요도]</p>
                                     <ul className="list-disc list-inside space-y-0.5">
-                                        <li>수익률: {dayData ? dayData.profitRate : 0}%</li>
-                                        <li>일일 변동: {dayData ? dayData.dailyProfitRate : 0}%</li>
-                                        <li>총 자산: {dayData ? dayData.totalAsset.toLocaleString() : 0}</li>
+                                        <li>수익률: <span className={dayData?.profitRate >= 0 ? 'text-red-500' : 'text-blue-500'}>{dayData?.profitRate || 0}%</span></li>
+                                        <li>총 자산: {dayData?.totalAsset?.toLocaleString() || 0}원</li>
+                                        <li>가용 잔액: {portfolio?.currentCapital?.toLocaleString() || 0}원</li>
                                     </ul>
                                 </div>
                             </div>
@@ -542,31 +577,26 @@ const Trade = () => {
                                 {dayData?.todayNews?.length > 0 ? (
                                     dayData.todayNews.map((news) => (
                                         <div key={news.newsId} className="mb-4 border-b pb-2">
-                                            <h4 className="font-bold text-sm text-blue-800">{news.title}</h4>
-                                            <p className="mt-1">{news.content}</p>
-                                            <div className="text-[10px] text-gray-500 mt-1">출처: {news.source} | 감성: {news.sentiment}</div>
+                                            <h4 className="font-bold text-sm text-blue-800">[{news.eventType}] {news.title}</h4>
+                                            <p className="text-xs mt-1 text-gray-700 line-clamp-3">{news.content}</p>
+                                            <div className="text-[10px] text-gray-400 mt-1">출처: {news.source} | 감성: {news.sentiment}</div>
                                         </div>
                                     ))
                                 ) : (
-                                    <p className="text-gray-400 text-center mt-10">투자를 시작하면 해당 날짜의 뉴스가 표시됩니다.</p>
-                                )}
+                                    <p className="text-gray-400 text-center mt-10">진행 중인 뉴스가 없습니다.</p>)}
                             </div>
                         </div>
 
                         {/* 4. 투자 결과 및 피드백 -> 추후 api 연동 */}
-                        <div className="flex-0.8 border-2 border-gray-400 rounded-lg p-2 bg-white flex flex-col overflow-hidden">
-                            <div className="flex items-center gap-2 mb-2">
-                                <img src={review} alt="review" className='w-10 h-10' />
-                                <h3 className="font-bold text-lg">투자 결과 및 피드백</h3>
-                            </div>
-                            <div className="border border-gray-400 rounded-lg p-3 flex-1 overflow-y-auto text-[11px] leading-snug font-jua space-y-2">
+                        <div className="h-48 border-2 border-gray-400 rounded-lg p-3 bg-white flex flex-col overflow-hidden">
+                            <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                                <img src={review} className="w-6" /> 투자 가이드
+                            </h3>
+                            <div className="flex-1 overflow-y-auto text-xs font-jua bg-yellow-50 p-2 rounded">
                                 {dayData ? (
-                                    <>
-                                        <p><span className="font-bold text-blue-700">현재 상태:</span> 시뮬레이션이 {dayData.status} 상태입니다.</p>
-                                        <p><span className="font-bold text-green-700">정보:</span> 뉴스의 감성을 분석하여 매수/매도 타이밍을 잡아보세요.</p>
-                                    </>
+                                    <p>💡 <b>{dayData.simulationDate}</b> 기준 분석: 뉴스 감성이 <b>{dayData.todayNews?.[0]?.sentiment || '중립'}</b>적입니다. 시장 상황을 고려하여 {dayData.profitRate < 0 ? '추가 매수' : '익절'}를 검토해보세요.</p>
                                 ) : (
-                                    <p>투자를 시작하여 피드백을 확인하세요.</p>
+                                    <p>투자를 시작하면 AI 분석 가이드가 제공됩니다.</p>
                                 )}
                             </div>
                         </div>
