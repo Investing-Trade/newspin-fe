@@ -101,6 +101,9 @@ const Trade = () => {
     const [selectedCategory, setSelectedCategory] = useState("bio"); // ✅ 선택 카테고리(현재 활성 카테고리) 상태 추가
     const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
     const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
+    const [analysisResult, setAnalysisResult] = useState(null); // AI 분석 결과 저장
+    const [isAnalyzing, setIsAnalyzing] = useState(false); // 로딩 상태
+    const [todayNews, setTodayNews] = useState([]); // 서버에서 받아온 랜덤 뉴스 저장
 
     // 입력 폼 상태
     const [config, setConfig] = useState({
@@ -108,6 +111,30 @@ const Trade = () => {
         startDate: '2020-01-01',
         endDate: '2020-03-31'
     });
+
+    // [추가] 뉴스 분석 API 호출 함수
+    const handleAnalyzeNews = async (newsId, userSentiment) => {
+        if (!newsId) return;
+
+        setIsAnalyzing(true);
+        try {
+            // 이미지 8.png의 AIAnalysisRequest 형식: { sentiment: string, reason: string }
+            const response = await api.post(`/news/${newsId}/analyze`, {
+                sentiment: userSentiment, // 사용자가 클릭한 예측값 (POSITIVE, NEGATIVE, NEUTRAL)
+                reason: "사용자 분석" // 필수값인 경우를 대비한 기본값
+            });
+
+            if (isSuccess(response.data)) {
+                // 이미지 8.png의 AIAnalysisResponse 데이터를 상태에 저장
+                setAnalysisResult(response.data.data);
+            }
+        } catch (error) {
+            console.error("AI 분석 실패:", error);
+            alert("분석 중 오류가 발생했습니다.");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
 
     // ✅ 종목 및 수량 관리 상태 수정
     const [tradeOrder, setTradeOrder] = useState({
@@ -243,6 +270,19 @@ const Trade = () => {
         } catch (error) {
             console.error("투자 시작 실패:", error);
             alert("투자를 시작하지 못했습니다: " + (error.response?.data?.message || error.message || "서버 오류"));
+        }
+    };
+
+    // [추가] 랜덤 뉴스 가져오기 API 호출 (GET /news/random)
+    const fetchRandomNews = async () => {
+        try {
+            const response = await api.get('/news/random');
+            if (isSuccess(response.data)) {
+                // API 응답 데이터 구조가 { data: { newsId, title, content ... } } 이므로 배열로 감싸 저장
+                setTodayNews([response.data.data]);
+            }
+        } catch (error) {
+            console.error("뉴스 로드 실패:", error);
         }
     };
 
@@ -535,22 +575,21 @@ const Trade = () => {
 
     const dateOptions = generateDateOptions('2020-01-01', '2020-03-31');
 
+    // useEffect 수정: 페이지 진입 시 뉴스를 가져옵니다.
     useEffect(() => {
         (async () => {
             const token = getAccessToken();
             if (!token) return navigate("/login");
 
             await fetchUserInfo();
+            await fetchRandomNews(); // 뉴스 데이터 초기 로드
 
-            // 세션 복구 프로세스
             const list = await fetchSessions();
             const savedSid = localStorage.getItem("simulationSessionId");
 
             if (savedSid && list.length > 0) {
-                // 저장된 ID가 있고 실제 서버 목록에도 존재하는지 확인 후 복구
                 await restoreSession(Number(savedSid), list);
             } else if (list.length > 0) {
-                // 저장된 ID가 없으면 목록 중 가장 최근(또는 ACTIVE) 세션으로 자동 선택
                 const latestSid = pickSessionIdToRestore(list);
                 if (latestSid) await restoreSession(latestSid, list);
             }
@@ -877,7 +916,7 @@ const Trade = () => {
                     {/* === [우측 영역] 뉴스 기사(상) + 피드백(하) === */}
                     <div className="flex-1 flex flex-col 2 overflow-hidden">
 
-                        {/* 2. 뉴스 기사 -> 추후 api 연동 */}
+                        {/* 2. 뉴스 기사 */}
                         <div className="flex-1 border-2 border-gray-400 rounded-lg p-1 flex flex-col bg-white overflow-hidden">
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="text-xl">📋</span>
@@ -898,16 +937,26 @@ const Trade = () => {
                             </div>
                         </div>
 
-                        {/* 4. 투자 결과 및 피드백 -> 추후 api 연동 */}
+                        {/* 4. 투자 결과 및 피드백(투자 가이드) 영역 */}
                         <div className="h-48 border-2 border-gray-400 rounded-lg p-3 bg-white flex flex-col overflow-hidden">
                             <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                                <img src={review} className="w-6" /> 투자 가이드
+                                <img src={review} className="w-6" alt="guide" /> AI 분석 결과
                             </h3>
                             <div className="flex-1 overflow-y-auto text-xs font-jua bg-yellow-50 p-2 rounded">
-                                {dayData ? (
-                                    <p>💡 <b>{dayData.simulationDate}</b> 기준 분석: 뉴스 감성이 <b>{dayData.todayNews?.[0]?.sentiment || '중립'}</b>적입니다. 시장 상황을 고려하여 {dayData.profitRate < 0 ? '추가 매수' : '익절'}를 검토해보세요.</p>
+                                {isAnalyzing ? (
+                                    <p className="text-blue-500 animate-pulse">AI가 뉴스 기사를 분석하고 있습니다...</p>
+                                ) : analysisResult ? (
+                                    <div className="space-y-1">
+                                        {/* 정답 여부에 따른 메시지 */}
+                                        <p className={`font-bold text-sm ${analysisResult.correct ? 'text-blue-600' : 'text-red-600'}`}>
+                                            {analysisResult.correct ? "🎯 예측에 성공했습니다!" : "🤔 예측이 빗나갔습니다."}
+                                        </p>
+                                        {/* AI의 실제 피드백 출력 */}
+                                        <p><b>AI 실제 분석:</b> {analysisResult.aiSentiment}</p>
+                                        <p className="text-gray-700">💡 {analysisResult.aiFeedback}</p>
+                                    </div>
                                 ) : (
-                                    <p>투자를 시작하면 AI 분석 가이드가 제공됩니다.</p>
+                                    <p>뉴스 기사에서 '예측' 버튼을 누르면 AI의 상세 피드백을 확인할 수 있습니다.</p>
                                 )}
                             </div>
                         </div>
