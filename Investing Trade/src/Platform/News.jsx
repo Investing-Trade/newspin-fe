@@ -61,28 +61,31 @@ const News = () => {
 
     // 내 정보 수정하기 연동 (PATCH /user/me)
     const handleUpdateInfo = async () => {
+        // Invest.jsx 방식의 페이로드 구성
         const updatePayload = {
             ...editData,
-            password: editData.password || userInfo.password
+            password: editData.password || userInfo.password // 입력 없으면 기존 비번 유지
         };
 
         try {
             const response = await axios.patch(`${API_BASE_URL}/user/me`, updatePayload, {
                 headers: getAuthHeader()
             });
-            if (response.data.status === "SUCCESS") {
-                alert("정보가 수정되었습니다.");
-                setUserInfo(updatePayload);
-                if (editData.password) {
-                    localStorage.setItem('userPwd', editData.password);
-                }
-                setIsEditing(false);
-            }
-        } catch (error) {
-            alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
-        }
-    };
 
+            // Invest.jsx는 status.toLowerCase()를 사용함
+            if (response.data.status.toLowerCase() === "success") {
+            alert("내 정보가 성공적으로 수정되었습니다.");
+            setUserInfo(updatePayload);
+            if (editData.password) {
+                localStorage.setItem('userPwd', editData.password);
+            }
+            setIsEditing(false);
+            setShowPassword(false);
+        }
+    } catch (error) {
+        alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
+    }
+};
     // 랜덤 뉴스 불러오기 (GET /news/random)
     const fetchRandomNews = async () => {
         const authHeader = getAuthHeader();
@@ -201,7 +204,6 @@ const News = () => {
                     <button
                         onClick={() => {
                             setIsProfileModalOpen(true);
-                            setIsEditing(false);
                         }}
                         className="hover:underline font-jua cursor-pointer"
                     >

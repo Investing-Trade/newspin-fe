@@ -19,7 +19,6 @@ import process from '../assets/data-processing.png';
 import clock from '../assets/clock.png';
 import calendar from '../assets/calendar.png';
 import stocks from '../assets/stock-exchange.png';
-
 import axios from 'axios';
 import save from '../assets/save.png';
 import { Eye, EyeOff } from 'lucide-react';
@@ -317,11 +316,29 @@ const Portfolio = () => {
     };
 
     // ===== 내 정보 수정 저장(현재 서버 API가 명확하지 않아서 UI만 유지) =====
-    const handleUpdateInfo = () => {
-        setIsEditing(false);
-        alert("정보가 수정되었습니다. (현재 서버 저장 API는 미연동 상태입니다)");
-    };
+    const handleUpdateInfo = async () => {
+        const updatePayload = {
+            ...editData,
+            password: editData.password || userInfo.password
+        };
 
+        try {
+            // api는 Portfolio.jsx 상단에 정의된 axios 인스턴스
+            const response = await api.patch('/user/me', updatePayload);
+
+            if (response.data.status.toLowerCase() === "success") {
+                alert("내 정보가 성공적으로 수정되었습니다.");
+                setUserInfo(updatePayload);
+                if (editData.password) {
+                    localStorage.setItem('userPwd', editData.password);
+                }
+                setIsEditing(false);
+                setShowPassword(false);
+            }
+        } catch (error) {
+            alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
+        }
+    };
     // ===== 섹션(보유종목) 데이터 구성: API 응답 형태가 달라도 최대한 맞춰서 표시 =====
     const holdingsMap = useMemo(() => {
         // 가능한 케이스들을 넓게 수용
