@@ -14,6 +14,30 @@ import exit from '../assets/exit.png';
 import save from '../assets/save.png';
 import { Eye, EyeOff } from 'lucide-react';
 
+const api = axios.create({
+    baseURL: "http://52.78.151.56:8080",
+});
+
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+api.interceptors.response.use(
+    (res) => res,
+    (error) => {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
+            localStorage.clear();
+            window.location.href = "/login";
+        }
+        return Promise.reject(error);
+    }
+);
+
 const News = () => {
     const navigate = useNavigate();
     const API_BASE_URL = 'http://52.78.151.56:8080';
@@ -40,19 +64,26 @@ const News = () => {
     // 내 정보 불러오기 (GET /user/me)
     const fetchUserInfo = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/user/me`, {
-                headers: getAuthHeader()
-            });
+            const response = await api.get('/user/me');
 
-            if (response.data.status.toUpperCase() === "SUCCESS") {
+            if (response.data.status?.toUpperCase() === "SUCCESS") {
                 const { userId, email } = response.data.data;
-                const savedPwd = localStorage.getItem('userPwd') || "";
-                const fetchedInfo = { userId, email, password: savedPwd };
+                const savedPwd = localStorage.getItem("userPwd") || "";
+
+                const fetchedInfo = {
+                    userId,
+                    email,
+                    password: savedPwd,
+                };
+
                 setUserInfo(fetchedInfo);
                 setEditData(fetchedInfo);
             }
         } catch (error) {
+            console.error("내 정보 조회 실패:", error);
+
             if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
                 localStorage.clear();
                 navigate('/login');
             }
@@ -61,31 +92,38 @@ const News = () => {
 
     // 내 정보 수정하기 연동 (PATCH /user/me)
     const handleUpdateInfo = async () => {
-        // Invest.jsx 방식의 페이로드 구성
         const updatePayload = {
             ...editData,
-            password: editData.password || userInfo.password // 입력 없으면 기존 비번 유지
+            password: editData.password || userInfo.password
         };
 
         try {
-            const response = await axios.patch(`${API_BASE_URL}/user/me`, updatePayload, {
-                headers: getAuthHeader()
-            });
+            const response = await api.patch('/user/me', updatePayload);
 
-            // Invest.jsx는 status.toLowerCase()를 사용함
-            if (response.data.status.toLowerCase() === "success") {
-            alert("내 정보가 성공적으로 수정되었습니다.");
-            setUserInfo(updatePayload);
-            if (editData.password) {
-                localStorage.setItem('userPwd', editData.password);
+            if (response.data.status?.toUpperCase() === "SUCCESS") {
+                alert("내 정보가 성공적으로 수정되었습니다.");
+                setUserInfo(updatePayload);
+
+                if (editData.password) {
+                    localStorage.setItem("userPwd", editData.password);
+                }
+
+                setIsEditing(false);
+                setShowPassword(false);
             }
-            setIsEditing(false);
-            setShowPassword(false);
+        } catch (error) {
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+                return;
+            }
+
+            const msg = error.response?.data?.message || "수정 중 오류가 발생했습니다.";
+            alert(msg);
         }
-    } catch (error) {
-        alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
-    }
-};
+    };
+
     // 랜덤 뉴스 불러오기 (GET /news/random)
     const fetchRandomNews = async () => {
         const authHeader = getAuthHeader();
@@ -98,12 +136,7 @@ const News = () => {
 
         setLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/news/random`, {
-                headers: {
-                    ...authHeader,
-                    'accept': '*/*'
-                }
-            });
+            const response = await api.get('/news/random');
 
             // 서버의 공통 응답 규격(SUCCESS) 확인
             if (response.data.status?.toUpperCase() === "SUCCESS") {
@@ -143,15 +176,9 @@ const News = () => {
         };
 
         try {
-            const response = await axios.post(
-                `${API_BASE_URL}/news/${newsData.newsId}/analyze`,
-                requestData,
-                {
-                    headers: {
-                        ...authHeader,
-                        'Content-Type': 'application/json'
-                    }
-                }
+            const response = await api.post(
+                `/news/${newsData.newsId}/analyze`,
+                requestData
             );
 
             if (response.data.status?.toUpperCase() === "SUCCESS") {
@@ -164,9 +191,7 @@ const News = () => {
 
     const handleLogout = async () => {
         try {
-            await axios.post(`${API_BASE_URL}/user/logout`, {}, {
-                headers: getAuthHeader()
-            });
+            await api.post('/user/logout');
         } catch (e) {
             console.error("로그아웃 API 호출 실패", e);
         } finally {
@@ -203,7 +228,10 @@ const News = () => {
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button
                         onClick={() => {
+                            setEditData(userInfo);
                             setIsProfileModalOpen(true);
+                            setIsEditing(false);
+                            setShowPassword(false);
                         }}
                         className="hover:underline font-jua cursor-pointer"
                     >
@@ -376,7 +404,7 @@ const News = () => {
                                     />
                                 </div>
 
-                                {/* 비밀번호 필드: lucide icon 토글 적용 */}
+                                {/* 비밀번호 필드 */}
                                 <div>
                                     <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
                                     <div className="relative">

@@ -99,9 +99,11 @@ const Trade = () => {
     const [dayData, setDayData] = useState(null); // 현재 날짜의 뉴스 및 자산 정보
     const [portfolio, setPortfolio] = useState(null); // setPortfolio 상태 추가
     const [selectedCategory, setSelectedCategory] = useState("bio"); // ✅ 선택 카테고리(현재 활성 카테고리) 상태 추가
-    const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
-    const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
 
+    const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
+    const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
+
+    // 내 정보 불러오기 (GET /user/me)
     // 입력 폼 상태
     const [config, setConfig] = useState({
         initialCapital: 1000000,
@@ -529,7 +531,9 @@ const Trade = () => {
                 setShowPassword(false);
             }
         } catch (error) {
-            alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
+
+            const msg = error.response?.data?.message || "수정 중 오류가 발생했습니다.";
+            alert(msg);
         }
     };
 
@@ -590,7 +594,11 @@ const Trade = () => {
 
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button
-                        onClick={() => setIsProfileModalOpen(true)}
+                        onClick={() => {
+                            setEditData(userInfo); // 모달을 열 때 현재 정보를 동기화
+                            setIsProfileModalOpen(true);
+                            setIsEditing(false);
+                        }}
                         className="hover:underline font-jua cursor-pointer"
                     >
                         내 정보
