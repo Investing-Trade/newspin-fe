@@ -32,48 +32,56 @@ const Password = () => {
   const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.com$/;
 
-  /// 통합 제출 핸들러
+  /// 비밀번호 재설정 통합 제출 핸들러
   const onSubmit = async (data) => {
     setIsSubmitting(true);
+
     try {
       if (!isCodeSent) {
-        // 1단계: 회원가입용 인증 발송 API를 사용하여 403 에러 회피
-        const response = await axios.post('/user/email/send-verification', null, {
+        // 1단계: 비밀번호 재설정 인증코드 발송
+        const response = await axios.post('/user/password/send-reset-code', null, {
           params: { email: data.email }
         });
 
-        if (response.data.status.toLowerCase() === "success") {
+        const isSuccess =
+          response.data?.status?.toUpperCase() === "SUCCESS" ||
+          response.data?.code?.toUpperCase() === "SUCCESS";
+
+        if (isSuccess) {
           alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
           setIsCodeSent(true);
+        } else {
+          alert(response.data?.message || "인증 코드 발송에 실패했습니다.");
         }
       } else {
-        // 2단계: 코드 검증 및 새로운 비밀번호로 변경
+        // 2단계: 인증코드 확인 후 비밀번호 재설정
         const response = await axios.post('/user/password/reset', {
           email: data.email,
           code: data.authCode,
           newPassword: data.newPassword
         });
 
-        if (response.data.status.toLowerCase() === "success") {
+        const isSuccess =
+          response.data?.status?.toUpperCase() === "SUCCESS" ||
+          response.data?.code?.toUpperCase() === "SUCCESS";
+
+        if (isSuccess) {
           alert("비밀번호가 성공적으로 변경되었습니다. 로그인 페이지로 이동합니다.");
           navigate('/login');
         } else {
-          alert(response.data.message || "비밀번호 재설정에 실패했습니다.");
+          alert(response.data?.message || "비밀번호 재설정에 실패했습니다.");
         }
       }
     } catch (error) {
       const errorData = error.response?.data;
       console.error("Error Detail:", errorData);
 
-      // 409 Conflict(U002) 발생 시 처리 로직
-      if (!isCodeSent && (error.response?.status === 409 || errorData?.code === 'U002')) {
+      const serverMessage =
+        errorData?.message ||
+        errorData?.error ||
+        "통신 중 오류가 발생했습니다.";
 
-        alert("계정 확인이 완료되었습니다. 메일함으로 발송된 인증번호를 입력해주세요.");
-        setIsCodeSent(true);
-      } else {
-        const serverMessage = errorData?.message || "통신 중 오류가 발생했습니다.";
-        alert(serverMessage);
-      }
+      alert(serverMessage);
     } finally {
       setIsSubmitting(false);
     }
