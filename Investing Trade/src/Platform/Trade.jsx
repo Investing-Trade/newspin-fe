@@ -98,10 +98,12 @@ const Trade = () => {
     const [session, setSession] = useState(null); // 현재 사용 중인 세션
     const [dayData, setDayData] = useState(null); // 현재 날짜의 뉴스 및 자산 정보
     const [portfolio, setPortfolio] = useState(null); // setPortfolio 상태 추가
+    const [selectedCategory, setSelectedCategory] = useState("bio"); // ✅ 선택 카테고리(현재 활성 카테고리) 상태 추가
 
-    const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
-    const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
+    const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
+    const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
 
+    // 내 정보 불러오기 (GET /user/me)
     // 입력 폼 상태
     const [config, setConfig] = useState({
         initialCapital: 1000000,
@@ -114,6 +116,82 @@ const Trade = () => {
         stockCode: 'CELLTRION',
         quantity: 1,
     });
+
+    // ✅ 1) STOCKS를 카테고리별로 분리 (기존 STOCKS 교체)
+    const STOCK_CATEGORIES = {
+        bio: [
+            { label: "셀트리온", code: "CELLTRION", price: 58000 },
+            { label: "한미약품", code: "HANMI", price: 300000 },
+            { label: "유한양행", code: "YUHAN", price: 70000 },
+            { label: "삼성바이오로직스", code: "SAMSUNG_BIO", price: 800000 },
+        ],
+        it: [
+            { label: "네이버", code: "NAVER", price: 210000 },
+            { label: "카카오", code: "KAKAO", price: 52000 },
+            { label: "삼성전자", code: "SAMSUNG_ELEC", price: 71000 },
+            { label: "SK하이닉스", code: "SK_HYNIX", price: 145000 },
+        ],
+        distribution: [
+            { label: "신세계", code: "SHINSEGAE", price: 170000 },
+            { label: "이마트", code: "EMART", price: 62000 },
+            { label: "롯데쇼핑", code: "LOTTE_SHOP", price: 78000 },
+            { label: "신세계푸드", code: "SHINSEGAE_FOOD", price: 45000 },
+        ],
+        travel: [
+            { label: "대한항공", code: "KOREAN_AIR", price: 24000 },
+            { label: "아시아나", code: "ASIANA", price: 11000 },
+            { label: "하나투어", code: "HANA_TOUR", price: 52000 },
+            { label: "모두투어", code: "MODE_TOUR", price: 18000 },
+        ],
+        franchise: [
+            { label: "신세계푸드", code: "SHINSEGAE_FOOD", price: 45000 },
+            { label: "CJ푸드빌", code: "CJ_FOODBILL", price: 26000 },
+            { label: "SPC삼립", code: "SPC_SAM", price: 62000 },
+            { label: "농심", code: "NONGSHIM", price: 380000 },
+        ],
+        entertainment: [
+            { label: "CGV", code: "CGV", price: 60000 },
+            { label: "SM", code: "SM", price: 110000 },
+            { label: "JYP", code: "JYP", price: 85000 },
+            { label: "하이브", code: "HYBE", price: 230000 },
+        ],
+    };
+
+    const currentStocks = STOCK_CATEGORIES[selectedCategory] ?? [];
+
+    // ✅ 카테고리 바뀌었는데 현재 stockCode가 그 카테고리에 없으면 첫 종목으로 맞춤
+    useEffect(() => {
+        if (!currentStocks.length) return;
+
+        const exists = currentStocks.some((s) => s.code === tradeOrder.stockCode);
+        if (!exists) {
+            setTradeOrder((prev) => ({ ...prev, stockCode: currentStocks[0].code }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedCategory]);
+
+    const selectedStock =
+        currentStocks.find((s) => s.code === tradeOrder.stockCode) ?? currentStocks[0];
+
+    const selectedLabel = selectedStock?.label ?? tradeOrder.stockCode;
+    const selectedPrice = selectedStock?.price ?? 0;
+    const totalPrice = (Number(tradeOrder.quantity) || 0) * (Number(selectedPrice) || 0);
+
+    // ✅ 4) 카테고리 클릭 핸들러 추가 (아무 함수들 있는 곳에 추가)
+    const handlePickCategory = (catKey) => {
+        if (!session?.sessionId) return alert("먼저 투자를 시작해주세요.");
+
+        const list = STOCK_CATEGORIES[catKey] ?? [];
+        if (list.length === 0) return;
+
+        setSelectedCategory(catKey);
+
+        // ✅ 카테고리 바꾸면 첫 종목으로 자동 선택 + 수량 유지
+        setTradeOrder((prev) => ({
+            ...prev,
+            stockCode: list[0].code,
+        }));
+    };
 
     const isSuccess = (data) => {
         const s = String(data?.status ?? "").toUpperCase();
@@ -409,29 +487,54 @@ const Trade = () => {
     // 매수/매도 실행 (POST /simulation/sessions/{sessionId}/trades)
     const handleTrade = async (type) => {
         if (!session?.sessionId) return alert("투자가 진행 중이 아닙니다.");
+
+        const qty = Number(tradeOrder.quantity);
+        if (!qty || qty <= 0) return alert("수량을 1 이상으로 입력하세요.");
+
         try {
             const response = await api.post(`/simulation/sessions/${session.sessionId}/trades`, {
                 stockCode: tradeOrder.stockCode,
                 tradeType: type,
-                quantity: tradeOrder.quantity,
-                price: 58000 // 현재가(가상)을 적용
+                quantity: qty,
+                price: selectedPrice, // ✅ 선택 종목 가격
             });
 
-            if (response.data.status === "SUCCESS") {
-                alert(`${tradeOrder.stockCode} ${tradeOrder.quantity}주 ${type === 'BUY' ? '매수' : '매도'} 완료!`);
+            if (isSuccess(response.data)) {
+                alert(`${selectedLabel} ${qty}주 ${type === 'BUY' ? '매수' : '매도'} 완료!`);
                 await Promise.all([
                     fetchPortfolio(session.sessionId),
                     fetchTrades(session.sessionId),
                 ]);
+            } else {
+                alert("거래 실패: " + JSON.stringify(response.data));
             }
         } catch (error) {
             alert("거래 실패: " + (error.response?.data?.message || "잔액이나 수량을 확인하세요."));
         }
     };
 
-    const handleUpdateInfo = () => {
-        setIsEditing(false);
-        alert("정보가 수정되었습니다.");
+    const handleUpdateInfo = async () => {
+        const updatePayload = {
+            ...editData,
+            password: editData.password || userInfo.password
+        };
+
+        try {
+            const response = await api.patch('/user/me', updatePayload);
+            if (response.data.status.toLowerCase() === "success") {
+                alert("내 정보가 성공적으로 수정되었습니다.");
+                setUserInfo(updatePayload);
+                if (editData.password) {
+                    localStorage.setItem('userPwd', editData.password);
+                }
+                setIsEditing(false);
+                setShowPassword(false);
+            }
+        } catch (error) {
+
+            const msg = error.response?.data?.message || "수정 중 오류가 발생했습니다.";
+            alert(msg);
+        }
     };
 
     const handleLogout = () => {
@@ -491,7 +594,11 @@ const Trade = () => {
 
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button
-                        onClick={() => setIsProfileModalOpen(true)}
+                        onClick={() => {
+                            setEditData(userInfo); // 모달을 열 때 현재 정보를 동기화
+                            setIsProfileModalOpen(true);
+                            setIsEditing(false);
+                        }}
                         className="hover:underline font-jua cursor-pointer"
                     >
                         내 정보
@@ -587,77 +694,204 @@ const Trade = () => {
                             </div>
 
                             <div className="grid grid-cols-2 gap-1 border-t pt-1 shrink-0">
+                                {/* ===== 왼쪽 컬럼(카테고리 + 드롭다운) ===== */}
                                 <div>
                                     <div className="flex items-center gap-2 text-[13px] font-bold">
-                                        <img src={trade} alt="trade" className='w-7 h-7' />
+                                        <img src={trade} alt="trade" className="w-7 h-7" />
                                         <span className="font-bold text-xs">매수 / 매도</span>
-                                        <span className="text-sm ml-auto font-semibold">잔액
-                                            <span className="border rounded-sm border-gray-400 px-2 py-0.5 ml-1">    {portfolio?.currentCapital?.toLocaleString() || 0} 원
-                                            </span></span>
+                                        <span className="text-sm ml-auto font-semibold">
+                                            잔액
+                                            <span className="border rounded-sm border-gray-400 px-2 py-0.5 ml-1">
+                                                {portfolio?.currentCapital?.toLocaleString() || 0} 원
+                                            </span>
+                                        </span>
                                     </div>
+
                                     <div className="text-[13px] font-bold mb-3 mt-1">종목 선택</div>
+
+                                    {/* 상단 4개 */}
                                     <div className="flex space-x-3 text-[12px] mb-2">
-                                        <img src={bio} alt="bio" className='w-5 h-5' />
-                                        <span className='font-bold text-[12px] mt-1'>바이오</span>
-                                        <img src={it} alt="it" className='w-5 h-5' />
-                                        <span className='font-bold text-[12px] mt-1'>IT/테크</span>
-                                        <img src={distribution} alt="distribution" className='w-5 h-5' />
-                                        <span className='font-bold text-[12px] mt-1'>유통</span>
-                                        <img src={globe} alt="globe" className='w-5 h-5 ml-2' />
-                                        <span className='font-bold text-[12px] mt-1'>여행</span>
+                                        {/* bio */}
+                                        <div className="flex flex-col items-center">
+                                            <button type="button" onClick={() => handlePickCategory("bio")} className="flex items-center gap-1">
+                                                <img src={bio} alt="bio" className="w-5 h-5" />
+                                                <span className="font-bold text-[12px] mt-1">바이오</span>
+                                            </button>
+                                            <select
+                                                className="border text-[9px] font-bold rounded w-18 mt-1"
+                                                value={selectedCategory === "bio" ? tradeOrder.stockCode : (STOCK_CATEGORIES.bio?.[0]?.code ?? "")}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onChange={(e) => {
+                                                    setSelectedCategory("bio");
+                                                    setTradeOrder((prev) => ({ ...prev, stockCode: e.target.value }));
+                                                }}
+                                            >
+                                                {STOCK_CATEGORIES.bio.map((s) => (
+                                                    <option key={s.code} value={s.code}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* it */}
+                                        <div className="flex flex-col items-center">
+                                            <button type="button" onClick={() => handlePickCategory("it")} className="flex items-center gap-1">
+                                                <img src={it} alt="it" className="w-5 h-5" />
+                                                <span className="font-bold text-[12px] mt-1">IT/테크</span>
+                                            </button>
+                                            <select
+                                                className="border text-[9px] font-bold rounded w-18 mt-1"
+                                                value={selectedCategory === "it" ? tradeOrder.stockCode : (STOCK_CATEGORIES.it?.[0]?.code ?? "")}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onChange={(e) => {
+                                                    setSelectedCategory("it");
+                                                    setTradeOrder((prev) => ({ ...prev, stockCode: e.target.value }));
+                                                }}
+                                            >
+                                                {STOCK_CATEGORIES.it.map((s) => (
+                                                    <option key={s.code} value={s.code}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* distribution */}
+                                        <div className="flex flex-col items-center">
+                                            <button type="button" onClick={() => handlePickCategory("distribution")} className="flex items-center gap-1">
+                                                <img src={distribution} alt="distribution" className="w-5 h-5" />
+                                                <span className="font-bold text-[12px] mt-1">유통</span>
+                                            </button>
+                                            <select
+                                                className="border text-[9px] font-bold rounded w-18 mt-1"
+                                                value={selectedCategory === "distribution" ? tradeOrder.stockCode : (STOCK_CATEGORIES.distribution?.[0]?.code ?? "")}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onChange={(e) => {
+                                                    setSelectedCategory("distribution");
+                                                    setTradeOrder((prev) => ({ ...prev, stockCode: e.target.value }));
+                                                }}
+                                            >
+                                                {STOCK_CATEGORIES.distribution.map((s) => (
+                                                    <option key={s.code} value={s.code}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* travel */}
+                                        <div className="flex flex-col items-center">
+                                            <button type="button" onClick={() => handlePickCategory("travel")} className="flex items-center gap-1">
+                                                <img src={globe} alt="globe" className="w-5 h-5 ml-2" />
+                                                <span className="font-bold text-[12px] mt-1">여행</span>
+                                            </button>
+                                            <select
+                                                className="border text-[9px] font-bold rounded w-18 mt-1"
+                                                value={selectedCategory === "travel" ? tradeOrder.stockCode : (STOCK_CATEGORIES.travel?.[0]?.code ?? "")}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onChange={(e) => {
+                                                    setSelectedCategory("travel");
+                                                    setTradeOrder((prev) => ({ ...prev, stockCode: e.target.value }));
+                                                }}
+                                            >
+                                                {STOCK_CATEGORIES.travel.map((s) => (
+                                                    <option key={s.code} value={s.code}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-row items-center space-x-3">
-                                        <select className="border text-[9px] font-bold rounded w-18">
-                                            <option>셀트리온</option>
-                                            <option>한미약품</option>
-                                            <option>유한양행</option>
-                                            <option>삼성바이오로직스</option>
-                                        </select>
-                                        <select className="border text-[9px] font-bold rounded w-18">
-                                            <option>셀트리온</option>
-                                            <option>한미약품</option>
-                                            <option>유한양행</option>
-                                            <option>삼성바이오로직스</option>
-                                        </select>
-                                        <select className="border text-[9px] font-bold rounded w-18">
-                                            <option>셀트리온</option>
-                                            <option>한미약품</option>
-                                            <option>유한양행</option>
-                                            <option>삼성바이오로직스</option>
-                                        </select>
-                                        <select className="border text-[9px] font-bold rounded w-18">
-                                            <option>셀트리온</option>
-                                            <option>한미약품</option>
-                                            <option>유한양행</option>
-                                            <option>삼성바이오로직스</option>
-                                        </select>
-                                    </div>
+
+                                    {/* 하단 2개 */}
                                     <div className="flex space-x-2 text-[8px] mt-2">
-                                        <img src={cutlery} alt="cutlery" className='w-5 h-5' />
-                                        <span className='font-bold text-[12px] mt-1'>외식 / 프랜차이즈</span>
-                                        <img src={enter} alt="enter" className='w-5 h-5' />
-                                        <span className='font-bold text-[12px] mt-1'>문화 / 엔터테인먼트</span>
+                                        {/* franchise */}
+                                        <div className="flex flex-col items-center">
+                                            <button type="button" onClick={() => handlePickCategory("franchise")} className="flex items-center gap-1">
+                                                <img src={cutlery} alt="cutlery" className="w-5 h-5" />
+                                                <span className="font-bold text-[12px] mt-1">외식 / 프랜차이즈</span>
+                                            </button>
+                                            <select
+                                                className="border text-[9px] font-bold rounded w-20 mt-1"
+                                                value={selectedCategory === "franchise" ? tradeOrder.stockCode : (STOCK_CATEGORIES.franchise?.[0]?.code ?? "")}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onChange={(e) => {
+                                                    setSelectedCategory("franchise");
+                                                    setTradeOrder((prev) => ({ ...prev, stockCode: e.target.value }));
+                                                }}
+                                            >
+                                                {STOCK_CATEGORIES.franchise.map((s) => (
+                                                    <option key={s.code} value={s.code}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* entertainment */}
+                                        <div className="flex flex-col items-center">
+                                            <button type="button" onClick={() => handlePickCategory("entertainment")} className="flex items-center gap-1">
+                                                <img src={enter} alt="enter" className="w-5 h-5" />
+                                                <span className="font-bold text-[12px] mt-1">문화 / 엔터테인먼트</span>
+                                            </button>
+                                            <select
+                                                className="border text-[9px] font-bold rounded w-20 mt-1"
+                                                value={selectedCategory === "entertainment" ? tradeOrder.stockCode : (STOCK_CATEGORIES.entertainment?.[0]?.code ?? "")}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onChange={(e) => {
+                                                    setSelectedCategory("entertainment");
+                                                    setTradeOrder((prev) => ({ ...prev, stockCode: e.target.value }));
+                                                }}
+                                            >
+                                                {STOCK_CATEGORIES.entertainment.map((s) => (
+                                                    <option key={s.code} value={s.code}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
-                                    <select className="border ml-1 text-[9px] font-bold rounded w-20">
-                                        <option>CGV</option>
-                                        <option>SM</option>
-                                    </select>
-                                    <select className="border ml-15 text-[9px] font-bold rounded w-20">
-                                        <option>신세계푸드</option>
-                                    </select>
                                 </div>
+
+                                {/* ===== 오른쪽 컬럼(선택 종목 정보 + 매수/매도) ===== */}
                                 <div className="flex flex-col ml-20 gap-1 items-end text-xs font-jua">
-                                    <div className="flex w-full justify-between items-center"><span className="font-bold">종목</span> <span className="border border-gray-400 px-4 rounded bg-white">셀트리온</span></div>
-                                    <div className="flex w-full justify-between items-center"><span className="font-bold">거래 대금</span> <span className="border border-gray-400 px-4 rounded bg-white font-mono">58,000 원</span></div>
-                                    <div className="flex w-full justify-between items-center"><span className="font-bold">거래량</span> <div className="flex items-center gap-1"><span className="border border-gray-400 px-4 rounded bg-white">10</span><span>주</span></div></div>
-                                    <div className="flex w-full justify-between items-center"><span className="font-bold">총 가격</span> <span className="border border-gray-400 px-4 rounded bg-white font-mono">580,000 원</span></div>
+                                    <div className="flex w-full justify-between items-center">
+                                        <span className="font-bold">종목</span>
+                                        <span className="border border-gray-400 px-4 rounded bg-white">{selectedLabel}</span>
+                                    </div>
+
+                                    <div className="flex w-full justify-between items-center">
+                                        <span className="font-bold">거래 대금</span>
+                                        <span className="border border-gray-400 px-4 rounded bg-white font-mono">
+                                            {selectedPrice.toLocaleString()} 원
+                                        </span>
+                                    </div>
+
+                                    <div className="flex w-full justify-between items-center">
+                                        <span className="font-bold">거래량</span>
+                                        <div className="flex items-center gap-1">
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                value={tradeOrder.quantity}
+                                                onChange={(e) => setTradeOrder((prev) => ({ ...prev, quantity: Number(e.target.value) }))}
+                                                className="border border-gray-400 px-2 rounded bg-white w-16 text-right"
+                                            />
+                                            <span>주</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex w-full justify-between items-center">
+                                        <span className="font-bold">총 가격</span>
+                                        <span className="border border-gray-400 px-4 rounded bg-white font-mono">
+                                            {totalPrice.toLocaleString()} 원
+                                        </span>
+                                    </div>
+
                                     <div className="flex gap-2 w-full mt-2">
-                                        <button onClick={() => handleTrade('BUY')} className="mt-8 ml-9 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-blue-700 active:scale-[0.90] transition-all bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800"><img src={buy} alt="buy" className='w-8 h-8' />
-                                            <span className='mt-2 text-[16px] ml-1'>매수</span>
+                                        <button
+                                            onClick={() => handleTrade("BUY")}
+                                            className="mt-8 ml-9 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-blue-700 active:scale-[0.90] transition-all bg-blue-600 text-white rounded-md py-1 font-bold shadow-md hover:bg-blue-800"
+                                        >
+                                            <img src={buy} alt="buy" className="w-8 h-8" />
+                                            <span className="mt-2 text-[16px] ml-1">매수</span>
                                         </button>
-                                        <button onClick={() => handleTrade('SELL')} className="mt-8 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-red-700 active:scale-[0.90] transition-all bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700">
-                                            <img src={selling} alt="sell" className='w-8 h-8' />
-                                            <span className='mt-2 text-[16px] ml-1'>매도</span>
+
+                                        <button
+                                            onClick={() => handleTrade("SELL")}
+                                            className="mt-8 w-[38%] px-1 cursor-pointer gap-2 flex hover:bg-red-700 active:scale-[0.90] transition-all bg-red-500 text-white rounded-md py-1 font-bold shadow-md hover:bg-red-700"
+                                        >
+                                            <img src={selling} alt="sell" className="w-8 h-8" />
+                                            <span className="mt-2 text-[16px] ml-1">매도</span>
                                         </button>
                                     </div>
                                 </div>
@@ -726,7 +960,6 @@ const Trade = () => {
                             <p className="text-lg">세션 삭제</p>
                         </button>
                     </div>
-
 
                     <div className="flex gap-3">
                         <button onClick={() => navigate(`/report/${session?.sessionId}`)} className="bg-slate-700 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-gray-400 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md">
@@ -827,4 +1060,5 @@ const Trade = () => {
         </div>
     );
 };
+
 export default Trade;

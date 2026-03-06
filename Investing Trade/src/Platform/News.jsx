@@ -14,10 +14,38 @@ import exit from '../assets/exit.png';
 import save from '../assets/save.png';
 import { Eye, EyeOff } from 'lucide-react';
 
+const api = axios.create({
+    baseURL: "http://52.78.151.56:8080",
+});
+
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+api.interceptors.response.use(
+    (res) => res,
+    (error) => {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
+            localStorage.clear();
+            window.location.href = "/login";
+        }
+        return Promise.reject(error);
+    }
+);
+
 const News = () => {
     const navigate = useNavigate();
     const API_BASE_URL = 'http://52.78.151.56:8080';
-    const token = localStorage.getItem('accessToken');
+
+    const getAuthHeader = () => {
+        const token = localStorage.getItem('accessToken');
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
 
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -28,6 +56,7 @@ const News = () => {
     const [selectedSentiment, setSelectedSentiment] = useState(null);
     const [aiResult, setAiResult] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null); // 에러 상태 추가
 
     const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
     const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
@@ -35,18 +64,26 @@ const News = () => {
     // 내 정보 불러오기 (GET /user/me)
     const fetchUserInfo = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/user/me`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (response.data.status.toLowerCase() === "success") {
+            const response = await api.get('/user/me');
+
+            if (response.data.status?.toUpperCase() === "SUCCESS") {
                 const { userId, email } = response.data.data;
-                const savedPwd = localStorage.getItem('userPwd') || "";
-                const fetchedInfo = { userId, email, password: savedPwd };
+                const savedPwd = localStorage.getItem("userPwd") || "";
+
+                const fetchedInfo = {
+                    userId,
+                    email,
+                    password: savedPwd,
+                };
+
                 setUserInfo(fetchedInfo);
                 setEditData(fetchedInfo);
             }
         } catch (error) {
-            if (error.response?.status === 401) {
+            console.error("내 정보 조회 실패:", error);
+
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
                 localStorage.clear();
                 navigate('/login');
             }
@@ -55,91 +92,106 @@ const News = () => {
 
     // 내 정보 수정하기 연동 (PATCH /user/me)
     const handleUpdateInfo = async () => {
+        const updatePayload = {
+            ...editData,
+            password: editData.password || userInfo.password
+        };
+
         try {
-            const response = await axios.patch(`${API_BASE_URL}/user/me`, editData, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (response.data.status.toLowerCase() === "success") {
-                alert("정보가 수정되었습니다.");
-                setUserInfo({ ...editData });
-                localStorage.setItem('userPwd', editData.password);
+            const response = await api.patch('/user/me', updatePayload);
+
+            if (response.data.status?.toUpperCase() === "SUCCESS") {
+                alert("내 정보가 성공적으로 수정되었습니다.");
+                setUserInfo(updatePayload);
+
+                if (editData.password) {
+                    localStorage.setItem("userPwd", editData.password);
+                }
+
                 setIsEditing(false);
                 setShowPassword(false);
             }
         } catch (error) {
-            alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+                return;
+            }
+
+            const msg = error.response?.data?.message || "수정 중 오류가 발생했습니다.";
+            alert(msg);
         }
     };
 
     // 랜덤 뉴스 불러오기 (GET /news/random)
     const fetchRandomNews = async () => {
+        const authHeader = getAuthHeader();
+
+        // 토큰이 없으면 요청을 보내지 않고 로그인으로 보냄 (403 원천 차단)
+        if (!authHeader.Authorization) {
+            navigate('/login');
+            return;
+        }
+
         setLoading(true);
         try {
-            const response = await axios.get(`${API_BASE_URL}/news/random`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Accept': 'application/json' // 명세에 맞춰 JSON 수락 헤더 추가
-                }
-            });
-            if (response.data.status.toLowerCase() === "success" || response.status === 200) {
-                const fetchedData = response.data.data || response.data;
-                setNewsData(fetchedData);
+            const response = await api.get('/news/random');
 
-                // 새 뉴스를 가져올 때 이전 분석 결과 초기화
+            // 서버의 공통 응답 규격(SUCCESS) 확인
+            if (response.data.status?.toUpperCase() === "SUCCESS") {
+                if (response.data.data) {
+                    setNewsData(response.data.data);
+                } else {
+                    // 서버 응답은 성공이나 데이터가 없는 경우
+                    setNewsData(null);
+                    setError("데이터가 존재하지 않습니다.");
+                }
                 setAiResult(null);
                 setUserComment("");
                 setSelectedSentiment(null);
             }
         } catch (error) {
-            console.error("뉴스 로딩 에러:", error);
-            // 404 에러 발생 시 콘솔에 상세 config를 출력하여 경로를 확인합니다.
-            if (error.response?.status === 404) {
-                console.log("URL 경로를 확인하세요:", error.config.url);
+            if (error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+            } else {
+                setError("데이터가 존재하지 않습니다."); // 네트워크 에러 등 예외 발생 시
             }
+            console.error("뉴스 로딩 실패:", error);
         } finally {
             setLoading(false);
         }
     };
 
-    // 의견 제출 및 AI 분석 (POST /news/{newsId}/analyze)
+    // AI 분석 제출 (POST /news/{newsId}/analyze)
     const handleSubmitOpinion = async () => {
         if (!newsData?.newsId) return;
-        if (!selectedSentiment || !userComment.trim()) {
-            alert("판단 결과(호재/악재)와 근거를 모두 입력해주세요.");
-            return;
-        }
 
+        const authHeader = getAuthHeader();
         const requestData = {
-            sentiment: selectedSentiment, // 'POSITIVE' 또는 'NEGATIVE'
+            sentiment: selectedSentiment, // POSITIVE, NEGATIVE, NEUTRAL
             reason: userComment.trim()
         };
+
         try {
-            const response = await axios.post(
-                `${API_BASE_URL}/news/${newsData.newsId}/analyze`,
-                requestData,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                        'Accept': '*/*'
-                    }
-                }
+            const response = await api.post(
+                `/news/${newsData.newsId}/analyze`,
+                requestData
             );
 
-            if (response.data.status.toLowerCase() === "success") {
+            if (response.data.status?.toUpperCase() === "SUCCESS") {
                 setAiResult(response.data.data);
             }
         } catch (error) {
-            console.error("분석 에러 상세:", error.response?.data);
-            alert(error.response?.data?.message || "분석 요청에 실패했습니다.");
+            console.error("분석 실패:", error);
         }
     };
 
     const handleLogout = async () => {
         try {
-            await axios.post(`${API_BASE_URL}/user/logout`, {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await api.post('/user/logout');
         } catch (e) {
             console.error("로그아웃 API 호출 실패", e);
         } finally {
@@ -150,10 +202,12 @@ const News = () => {
 
     useEffect(() => {
         document.title = "NewsPin - News";
+        const token = localStorage.getItem('accessToken');
         if (!token) {
             navigate('/login');
             return;
         }
+
         fetchUserInfo();
         fetchRandomNews();
     }, []);
@@ -174,8 +228,10 @@ const News = () => {
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button
                         onClick={() => {
+                            setEditData(userInfo);
                             setIsProfileModalOpen(true);
                             setIsEditing(false);
+                            setShowPassword(false);
                         }}
                         className="hover:underline font-jua cursor-pointer"
                     >
@@ -186,12 +242,11 @@ const News = () => {
                 </div>
             </div>
 
-            {/* 뉴스 및 분석 컨텐츠 영역 */}
+            {/* 뉴스 컨텐츠 */}
             <div className="w-full max-w-6xl bg-white rounded-xl shadow-2xl p-6 flex flex-col gap-4 border-4 border-gray-400 flex-1 overflow-hidden">
-                {/* 뉴스 상단부 */}
                 <div className="flex flex-col border-2 rounded-lg border-black p-1 md:flex-row pb-1 gap-2 h-[50%] shrink-2">
                     <div className="w-full md:w-1/3 border-2 border-gray-300 rounded-lg flex items-center justify-center p-4 h-full bg-gray-50">
-                        <div className="text-3xl font-bold flex items-center gap-2">
+                        <div className="text-3xl font-bold flex flex-col items-center gap-2">
                             <span className="text-green-700 uppercase font-jua">
                                 {loading ? "LOADING..." : (newsData?.source || "NEWS SOURCE")}
                             </span>
@@ -200,8 +255,7 @@ const News = () => {
                     </div>
                     <div className="w-full md:w-9/10 flex flex-col h-full p-2">
                         <h2 className="text-xl font-bold mb-2 truncate font-jua">
-                            {loading ? "뉴스를 가져오는 중입니다..." : newsData?.title || "뉴스가 없습니다."}
-                        </h2>
+                            {loading ? "뉴스를 가져오는 중입니다..." : (error ? error : newsData?.title || "데이터가 존재하지 않습니다.")}                        </h2>
                         <hr />
                         <div className="text-[15px] leading-relaxed text-gray-800 overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-300 flex-1 font-jua mt-2">
                             <p className="whitespace-pre-wrap">
@@ -350,7 +404,7 @@ const News = () => {
                                     />
                                 </div>
 
-                                {/* 비밀번호 필드: lucide icon 토글 적용 */}
+                                {/* 비밀번호 필드 */}
                                 <div>
                                     <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
                                     <div className="relative">
