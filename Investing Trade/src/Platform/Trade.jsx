@@ -386,10 +386,23 @@ const Trade = () => {
     const fetchUserInfo = async () => {
         try {
             const response = await api.get('/user/me');
-            if (response.data.status === "SUCCESS") {
-                setUserInfo(response.data.data);
+
+            if (response.data.status?.toUpperCase() === "SUCCESS") {
+                const { userId, email } = response.data.data;
+                const savedPwd = localStorage.getItem("userPwd") || "";
+
+                const fetchedInfo = {
+                    userId,
+                    email,
+                    password: savedPwd,
+                };
+
+                setUserInfo(fetchedInfo);
+                setEditData(fetchedInfo);
             }
-        } catch (error) { console.error(error); }
+        } catch (error) {
+            console.error("내 정보 조회 실패:", error);
+        }
     };
 
     const fetchDayData = async (sid) => {
@@ -521,17 +534,19 @@ const Trade = () => {
 
         try {
             const response = await api.patch('/user/me', updatePayload);
-            if (response.data.status.toLowerCase() === "success") {
+
+            if (response.data.status?.toUpperCase() === "SUCCESS") {
                 alert("내 정보가 성공적으로 수정되었습니다.");
                 setUserInfo(updatePayload);
+
                 if (editData.password) {
-                    localStorage.setItem('userPwd', editData.password);
+                    localStorage.setItem("userPwd", editData.password);
                 }
+
                 setIsEditing(false);
                 setShowPassword(false);
             }
         } catch (error) {
-
             const msg = error.response?.data?.message || "수정 중 오류가 발생했습니다.";
             alert(msg);
         }
@@ -595,9 +610,10 @@ const Trade = () => {
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button
                         onClick={() => {
-                            setEditData(userInfo); // 모달을 열 때 현재 정보를 동기화
+                            setEditData(userInfo);
                             setIsProfileModalOpen(true);
                             setIsEditing(false);
+                            setShowPassword(false);
                         }}
                         className="hover:underline font-jua cursor-pointer"
                     >
