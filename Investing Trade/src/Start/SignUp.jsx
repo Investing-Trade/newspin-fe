@@ -16,6 +16,10 @@ const SignUp = () => {
     const [isCodeSent, setIsCodeSent] = useState(false); // 인증번호 발송 여부
     const [timer, setTimer] = useState(0); // 타이머 (초)
 
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+    const [emailVerified, setEmailVerified] = useState(false);
+
     // 타이머 기능
     useEffect(() => {
         let interval;
@@ -43,16 +47,74 @@ const SignUp = () => {
                 params: { email: vEmail }
             });
 
-           if (response.data.status === "success" || response.data.code === "200") {
-            setIsCodeSent(true);
-            setTimer(180);
-            alert("인증번호가 발송되었습니다.");
-        } else {
-            alert(`[${response.data.code}] ${response.data.message}`);
-        }
-    } catch (error) {
+            if (
+                response.data.status?.toUpperCase() === "SUCCESS" ||
+                response.data.code === "200"
+            ) {
+                setIsCodeSent(true);
+                setTimer(180);
+                setEmailVerified(false);
+                clearErrors("authCode");
+                alert("인증번호가 발송되었습니다.");
+            } else {
+                alert(`[${response.data.code}] ${response.data.message}`);
+            }
+        } catch (error) {
             const errorData = error.response?.data;
-            alert(`${errorData?.message || "서버 오류"} (${errorData?.code || "C999"})`); console.error("인증번호 발송 에러 상세:", errorData);
+            alert(`${errorData?.message || "서버 오류"} (${errorData?.code || "C999"})`);
+            console.error("인증번호 발송 에러 상세:", errorData);
+        }
+    };
+
+    const handleVerifyCode = async () => {
+        const isEmailValid = await trigger("verificationEmail");
+        const isCodeValid = await trigger("authCode");
+
+        if (!vEmail || !isEmailValid) {
+            alert("인증용 이메일을 올바르게 입력해주세요.");
+            return;
+        }
+
+        if (!isCodeValid) {
+            alert("인증번호를 올바르게 입력해주세요.");
+            return;
+        }
+
+        try {
+            setIsVerifyingCode(true);
+
+            const authCode = watch("authCode");
+
+            const verifyRes = await axios.post('/user/email/verify', {
+                email: vEmail,
+                code: authCode
+            });
+
+            const verifyResult = verifyRes.data?.data;
+
+            if (
+                verifyRes.data.status?.toUpperCase() === "SUCCESS" &&
+                verifyResult?.verified
+            ) {
+                setEmailVerified(true);
+                clearErrors("authCode");
+                alert(verifyResult?.message || "이메일 인증이 완료되었습니다.");
+            } else {
+                setEmailVerified(false);
+                setError("authCode", {
+                    type: "manual",
+                    message: verifyResult?.message || "인증번호가 올바르지 않습니다."
+                });
+            }
+        } catch (error) {
+            const errorData = error.response?.data;
+            setEmailVerified(false);
+            setError("authCode", {
+                type: "manual",
+                message: errorData?.message || "인증 확인 중 오류가 발생했습니다."
+            });
+        } finally {
+            setIsVerifyingCode(false);
         }
     };
 
@@ -62,17 +124,17 @@ const SignUp = () => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
-    // 페이지 접속 시 타이틀 변경
     useEffect(() => {
         document.title = "NewsPin - SignUp";
     }, []);
 
-    // 1. useForm 설정: mode를 "onChange"로 설정하여 실시간 검증 활성화
     const {
         register,
         handleSubmit,
         watch,
         trigger,
+        setError,
+        clearErrors,
         formState: { errors, dirtyFields },
     } = useForm({
         mode: "onChange"
@@ -83,40 +145,34 @@ const SignUp = () => {
 
     // [수정] 제출 핸들러: 인증 확인 후 회원가입 및 데이터 매핑 최적화
     const onSubmit = async (data) => {
+        if (!emailVerified) {
+            alert("이메일 인증을 먼저 완료해주세요.");
+            return;
+        }
+
         try {
-            const verifyRes = await axios.post('/user/email/verify', {
-                email: data.verificationEmail,
-                code: data.authCode
-            });
+            setIsSubmitting(true);
 
-            const verifyResult = verifyRes.data.data;
-
-            if (verifyRes.data.status?.toUpperCase() !== "SUCCESS" || !verifyResult?.verified) {
-                alert(verifyResult?.message || verifyRes.data.message || "인증번호가 올바르지 않습니다.");
-                return;
-            }
-
-            // 2. 실제 회원가입 요청 (/user/sign-up)
             const signUpRes = await axios.post('/user/sign-up', {
                 email: data.email,
                 password: data.password
             });
 
-            if (signUpRes.data.status === "SUCCESS") {
-                // 가입 성공 시 토큰이 담겨온다면(SignInResponse와 동일 구조일 경우) 처리
-                const authData = signUpRes.data.data?.jwtToken;
-                if (authData) {
-                    localStorage.setItem('accessToken', authData.accessToken);
-                    localStorage.setItem('refreshToken', authData.refreshToken);
-                    axios.defaults.headers.common['Authorization'] = `${authData.grantType} ${authData.accessToken}`;
-                }
-
-                alert("가입 완료! 로그인 후 투자 감각을 깨워보세요.");
-                navigate('/main');
+            if (
+                signUpRes.data.status?.toUpperCase() === "SUCCESS" ||
+                signUpRes.data.code === "200"
+            ) {
+                alert("회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.");
+                navigate('/login');
+                return;
             }
+
+            alert(signUpRes.data.message || "회원가입에 실패했습니다.");
         } catch (error) {
             const serverError = error.response?.data;
             alert(`[${serverError?.code || 'Error'}] ${serverError?.message || "오류가 발생했습니다."}`);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -174,9 +230,9 @@ const SignUp = () => {
                             <input
                                 type="text"
                                 placeholder="newspin@naver.com"
-                                {...register("email", { // 이름: email
+                                {...register("email", {
                                     required: "이메일을 입력해주세요.",
-                                    pattern: { value: /^[^\s@]+@[^\s@]+\.com$/, message: "형식 오류" }
+                                    pattern: { value: emailRegex, message: "형식 오류" }
                                 })}
                                 className={`w-full px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('email')}`}
                             />
@@ -222,9 +278,9 @@ const SignUp = () => {
                                 <input
                                     type="text"
                                     placeholder="인증번호를 받을 이메일"
-                                    {...register("verificationEmail", { // [수정] 이름을 verificationEmail로 변경
+                                    {...register("verificationEmail", {
                                         required: "인증용 이메일을 입력해주세요.",
-                                        pattern: { value: /^[^\s@]+@[^\s@]+\.com$/, message: "형식 오류" }
+                                        pattern: { value: emailRegex, message: "형식 오류" }
                                     })}
                                     className={`flex-1 px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('verificationEmail')}`}
                                 />
@@ -259,16 +315,28 @@ const SignUp = () => {
                                     </span>
                                 </div>
                                 {errors.authCode && <p className="text-red-500 text-xs font-bold">{errors.authCode.message}</p>}
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyCode}
+                                    className="w-full bg-gray-800 text-white px-4 py-2 cursor-pointer rounded-lg text-sm font-bold hover:bg-gray-700 transition-all"
+                                >
+                                    인증번호 확인
+                                </button>
+
+                                {emailVerified && (
+                                    <p className="text-blue-600 text-xs font-bold">이메일 인증이 완료되었습니다.</p>
+                                )}
                             </div>
                         )}
 
                         {/* 최종 제출 버튼 */}
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 border border-white text-sm cursor-pointer text-white font-bold py-3 rounded-lg mt-8 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-1"
+                            disabled={isSubmitting || !emailVerified}
+                            className="w-full bg-blue-600 border border-white text-sm cursor-pointer text-white font-bold py-3 rounded-lg mt-8 shadow-md hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-1 disabled:bg-gray-400 disabled:cursor-not-allowed"
                         >
                             <img src={paperplane} alt="plane" className="w-5 h-5" />
-                            <span>가입 완료! 로그인 후 투자 감각을 깨워보세요.</span>
+                            <span>{isSubmitting ? "가입 중..." : "가입 완료! 로그인 후 투자 감각을 깨워보세요."}</span>
                         </button>
                     </form>
                 </div>

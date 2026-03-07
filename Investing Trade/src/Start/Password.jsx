@@ -30,7 +30,29 @@ const Password = () => {
 
   const newPasswordValue = watch("newPassword");
   const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.com$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // password API
+  const sendResetCode = (email) => {
+    return axios({
+      method: 'post',
+      url: '/user/password/send-reset-code',
+      params: {
+        email: email
+      }
+    });
+  };
+  const resetPassword = (email, code, newPassword) => {
+    return axios({
+      method: 'post',
+      url: '/user/password/reset',
+      data: {
+        email,
+        code,
+        newPassword
+      }
+    });
+  };
 
   /// 비밀번호 재설정 통합 제출 핸들러
   const onSubmit = async (data) => {
@@ -38,15 +60,12 @@ const Password = () => {
 
     try {
       if (!isCodeSent) {
-        // 1단계: 비밀번호 재설정 인증코드 발송
-        const response = await axios.post('/user/password/send-reset-code', null, {
-          params: { email: data.email }
-        });
+        const response = await sendResetCode(data.email);
 
         const isSuccess =
-          response.data?.status?.toUpperCase() === "SUCCESS" ||
+          response.data?.success === true ||
+          response.data?.status?.toLowerCase() === "success" ||
           response.data?.code?.toUpperCase() === "SUCCESS";
-
         if (isSuccess) {
           alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
           setIsCodeSent(true);
@@ -54,14 +73,14 @@ const Password = () => {
           alert(response.data?.message || "인증 코드 발송에 실패했습니다.");
         }
       } else {
-        // 2단계: 인증코드 확인 후 비밀번호 재설정
-        const response = await axios.post('/user/password/reset', {
-          email: data.email,
-          code: data.authCode,
-          newPassword: data.newPassword
-        });
+        const response = await resetPassword(
+          data.email,
+          data.authCode,
+          data.newPassword
+        );
 
         const isSuccess =
+          response.data?.success === true ||
           response.data?.status?.toUpperCase() === "SUCCESS" ||
           response.data?.code?.toUpperCase() === "SUCCESS";
 

@@ -6,36 +6,31 @@ import { useForm } from 'react-hook-form';
 import { useEffect } from 'react';
 import axios from 'axios';
 
-// API 서버의 Base URL 설정
-const API_BASE_URL = "http://52.78.151.56:8080";
+axios.defaults.baseURL = 'http://52.78.151.56:8080';
 
 const Login = () => {
-  const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
+  const navigate = useNavigate();
 
-  // 1. 페이지 접속 시 타이틀 변경
+
   useEffect(() => {
     document.title = "NewsPin - Login";
   }, []);
 
-  // 2. useForm 초기화 (실시간 검증을 위해 mode: "onChange" 설정)
   const {
     register,
     handleSubmit,
-    formState: { errors, dirtyFields }, // dirtyFields로 입력 여부 확인
+    formState: { errors, dirtyFields },
   } = useForm({
     mode: "onChange"
   });
 
-  const onSubmit = async (data, e) => {
-
-    // 폼 제출 시 브라우저의 기본 새로고침(GET 요청)을 명시적으로 차단
-    if (e) e.preventDefault();
+  const onSubmit = async (data) => {
 
     try {
 
       const response = await axios({
         method: 'post',
-        url: `${API_BASE_URL}/user/sign-in`,
+        url: '/user/sign-in', 
         data: {
           email: data.email,
           password: data.password
@@ -45,16 +40,20 @@ const Login = () => {
         }
       });
 
-      
+
       const resData = response.data;
 
       // [디버깅] 이 로그가 찍히는지 확인하세요. 안 찍힌다면 통신 자체가 실패한 것입니다.
       console.log("서버 응답 데이터:", resData);
 
-      // 2. 서버 응답이 SUCCESS가 아니면 여기서 즉시 종료
-      if (!resData || resData.status !== "success") {
+      const isSuccess =
+        resData?.success === true ||
+        resData?.status?.toLowerCase() === "success" ||
+        resData?.code?.toUpperCase() === "SUCCESS";
+
+      if (!isSuccess) {
         alert(resData?.message || "로그인 정보를 확인해주세요.");
-        return; // 다음 로직으로 넘어가지 않게 차단
+        return;
       }
 
       // 3. 토큰 데이터가 있는지 안전하게 확인
@@ -140,7 +139,7 @@ const Login = () => {
                 placeholder="newspin@naver.com"
                 {...register("email", { // 이름: email
                   required: "이메일을 입력해주세요.",
-                  pattern: { value: /^[^\s@]+@[^\s@]+\.com$/, message: "올바른 이메일 형식을 입력해주세요!" }
+                  pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "올바른 이메일 형식을 입력해주세요!" }
                 })}
                 className={`w-full px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('email')}`}
               />
