@@ -62,30 +62,23 @@ const SignUp = () => {
 
             const response = await publicApi.post(
                 '/user/email/send-verification',
-                '',
+                null,
                 {
-                    params: { email },
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
+                    params: { email }
                 }
             );
 
             const result = response.data;
 
-            console.log("send-verification status:", response.status);
-            console.log("send-verification headers:", response.headers);
-            console.log("send-verification body:", result);
-
             if (
                 response.status === 200 &&
-                (result?.status?.toLowerCase() === "success" || result?.code === "200")
+                (result?.status?.toUpperCase() === "SUCCESS" || result?.code === "200")
             ) {
                 setIsCodeSent(true);
                 setTimer(180);
                 setEmailVerified(false);
                 clearErrors("authCode");
-                setError("authCode", {});
+                setValue("authCode", "");
                 alert(result?.message || "인증번호가 발송되었습니다.");
             } else {
                 alert(
@@ -94,14 +87,9 @@ const SignUp = () => {
             }
         } catch (error) {
             const errorData = error.response?.data;
-
-            console.log("send-verification error status:", error.response?.status);
-            console.log("send-verification error headers:", error.response?.headers);
-            console.log("send-verification error body:", errorData);
-
+            console.log("send-verification error:", error);
             alert(
-                `[${errorData?.code || error.response?.status || "ERROR"}] ${errorData?.message || "인증번호 발송 중 오류가 발생했습니다."
-                }`
+                `[${errorData?.code || 'Error'}] ${errorData?.message || "인증번호 발송 중 오류가 발생했습니다."}`
             );
         } finally {
             setIsSendingCode(false);
@@ -131,6 +119,7 @@ const SignUp = () => {
             const verifyResult = verifyRes.data?.data;
 
             if (
+                verifyRes.status === 200 &&
                 (verifyRes.data.status?.toUpperCase() === "SUCCESS" || verifyRes.data.code === "200") &&
                 verifyResult?.verified === true
             ) {
@@ -175,6 +164,7 @@ const SignUp = () => {
         trigger,
         setError,
         clearErrors,
+        setValue,
         formState: { errors, dirtyFields },
     } = useForm({
         mode: "onChange"
@@ -200,17 +190,19 @@ const SignUp = () => {
             setIsSubmitting(true);
 
             // 2. createAccount(info) 호출
-            const signUpRes = await axios.post('/user/sign-up', {
+            const signUpRes = await publicApi.post('/user/sign-up', {
                 email: data.email.trim(),
                 password: data.password
             });
 
             // 3. 성공 시: 회원가입 성공 -> 로그인 화면 이동
-            if (signUpRes.data.status?.toUpperCase() === "SUCCESS" || signUpRes.data.code === "200") {
+            if (
+                signUpRes.status === 200 &&
+                (signUpRes.data.status?.toUpperCase() === "SUCCESS" || signUpRes.data.code === "200")
+            ) {
                 alert("회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.");
                 navigate('/login');
             } else {
-                // 4. 실패 시: 오류 메시지 표시 (대안 흐름)
                 alert(signUpRes.data.message || "회원가입에 실패했습니다.");
             }
         } catch (error) {
@@ -349,6 +341,7 @@ const SignUp = () => {
                                             setIsCodeSent(false);
                                             setTimer(0);
                                             clearErrors("authCode");
+                                            setValue("authCode", "");
                                         }
                                     })}
                                     className={`flex-1 px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('verificationEmail')}`}

@@ -3,14 +3,15 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 
 axios.defaults.baseURL = 'http://52.78.151.56:8080';
 
 const Login = () => {
   const navigate = useNavigate();
-
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     document.title = "NewsPin - Login";
@@ -30,9 +31,9 @@ const Login = () => {
 
       const response = await axios({
         method: 'post',
-        url: '/user/sign-in', 
+        url: '/user/sign-in',
         data: {
-          email: data.email,
+          email: data.email.trim(),
           password: data.password
         },
         headers: {
@@ -46,18 +47,8 @@ const Login = () => {
       // [디버깅] 이 로그가 찍히는지 확인하세요. 안 찍힌다면 통신 자체가 실패한 것입니다.
       console.log("서버 응답 데이터:", resData);
 
-      const isSuccess =
-        resData?.success === true ||
-        resData?.status?.toLowerCase() === "success" ||
-        resData?.code?.toUpperCase() === "SUCCESS";
-
-      if (!isSuccess) {
-        alert(resData?.message || "로그인 정보를 확인해주세요.");
-        return;
-      }
-
       // 3. 토큰 데이터가 있는지 안전하게 확인
-      const tokenData = resData.data?.jwtToken || resData.data?.signInResponse?.jwtToken;
+      const tokenData = resData?.data?.jwtToken;
 
       // 4. 모든 검증(토큰 존재 여부) 통과 후 저장 및 이동
       if (tokenData && tokenData.accessToken) {
@@ -71,8 +62,21 @@ const Login = () => {
         // 이후 모든 API 요청에 사용할 공통 인증 헤더 설정
         axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
 
+        // 로그인 성공 후 사용자 정보 조회
+        try {
+          const meResponse = await axios.get('/user/me');
+          const userData = meResponse?.data?.data;
+
+          if (userData) {
+            localStorage.setItem('userId', String(userData.userId));
+            localStorage.setItem('email', userData.email);
+          }
+        } catch (meError) {
+          console.error("사용자 정보 조회 실패:", meError.response?.data || meError);
+        }
+
         alert("로그인 성공!");
-        navigate('/main'); // 드디어 방해 없이 이 줄이 실행됩니다.
+        navigate('/main');
       } else {
         console.error("Token structure mismatch:", resData);
         alert("인증 정보가 유효하지 않습니다. 다시 시도해주세요.");
@@ -81,8 +85,11 @@ const Login = () => {
     } catch (error) {
       // 서버 에러(C999 등) 및 네트워크 오류 처리
       console.error("Login Error:", error.response?.data);
-      const msg = error.response?.data?.message || "서버 통신 중 오류가 발생했습니다.";
-      alert(msg);
+      const errorData = error.response?.data;
+      const msg =
+        errorData?.message ||
+        error.message ||
+        "서버 통신 중 오류가 발생했습니다."; alert(msg);
     }
   };
 
@@ -149,18 +156,23 @@ const Login = () => {
             {/* 비밀번호 필드 */}
             <div className="space-y-2">
               <p className='font-jua text-lg pb-1'>비밀번호</p>
-              <input
-                type="password"
-                placeholder="비밀번호를 입력해주세요."
-                {...register("password", {
-                  required: "비밀번호를 입력해주세요.",
-                  pattern: {
-                    value: authRegex,
-                    message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)"
-                  }
-                })}
-                className={`w-full px-4 py-3 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('password')}`}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="비밀번호를 입력해주세요."
+                  {...register("password", {
+                    required: "비밀번호를 입력해주세요.",
+                  })}
+                  className={`w-full px-4 py-3 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('password')}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
               {errors.password && <p className="text-red-500 text-xs font-bold">{errors.password.message}</p>}
             </div>
 
