@@ -15,7 +15,8 @@ const publicApi = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: false,
     headers: {
-        Accept: '*/*'
+        Accept: '*/*',
+        'Content-Type': 'application/json'
     }
 });
 
@@ -97,11 +98,12 @@ const SignUp = () => {
 
             const sendRes = await publicApi.post(
                 '/user/email/send-verification',
-                null,
+                '',
                 {
                     params: { email },
                     headers: {
-                        Accept: '*/*'
+                        Accept: '*/*',
+                        'Content-Type': 'application/x-www-form-urlencoded'
                     }
                 }
             );
@@ -113,7 +115,7 @@ const SignUp = () => {
 
             if (
                 sendRes.status === 200 &&
-                result?.status?.toLowerCase() === "success"
+                String(result?.status || "").toLowerCase() === "success"
             ) {
                 console.log("[send-verification] 인증번호 발송 성공 처리 진입");
                 setIsCodeSent(true);
@@ -201,17 +203,19 @@ const SignUp = () => {
             console.log("[email-verify] HTTP 상태코드:", verifyRes.status);
             console.log("[email-verify] 전체 응답:", verifyRes.data);
 
-            const verifyResult = verifyRes.data?.data;
+            const apiResponse = verifyRes.data; // ApiResponse 전체 (status, code, message, data 포함)
+            const verifyData = apiResponse.data; // 실제 데이터 { verified: true, message: "..." }
 
             if (
                 verifyRes.status === 200 &&
-                verifyResult?.verified === true
+                String(apiResponse?.status || "").toLowerCase() === "success" &&
+                verifyData?.verified === true
             ) {
                 console.log("[email-verify] 이메일 인증 성공");
                 setEmailVerified(true);
                 setVerifiedEmail(email);
                 clearErrors("authCode");
-                alert(verifyResult?.message || "이메일 인증이 완료되었습니다.");
+                alert(verifyData?.message || "이메일 인증이 완료되었습니다.");
             } else {
                 console.log("[email-verify] 이메일 인증 실패", {
                     status: verifyRes.data?.status,
@@ -224,9 +228,9 @@ const SignUp = () => {
                 setVerifiedEmail("");
                 setError("authCode", {
                     type: "manual",
-                    message: verifyResult?.message || "인증번호가 올바르지 않습니다."
+                    message: verifyData?.message || "인증번호가 올바르지 않습니다."
                 });
-                alert(verifyResult?.message || "인증에 실패했습니다.");
+                alert(verifyData?.message || "인증에 실패했습니다.");
             }
         } catch (error) {
             const errorData = error.response?.data;
@@ -313,7 +317,7 @@ const SignUp = () => {
 
             const requestBody = {
                 email: normalizedSignUpEmail,
-                password: (data.password || "").trim()
+                password: data.password
             };
 
             console.log("[sign-up] 최종 요청 body:", requestBody);
@@ -401,7 +405,8 @@ const SignUp = () => {
                                     required: "이메일을 입력해주세요.",
                                     pattern: { value: emailRegex, message: "형식 오류" }
                                 })}
-                                className={`w-full px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('email')}`}
+                                readOnly={emailVerified} // 이메일 인증 시 읽기 전용으로 변경
+                                className={`w-full px-4 py-2 border rounded-lg outline-none text-sm font-bold ${emailVerified ? 'bg-gray-100 cursor-not-allowed' : getBorderStyle('email')}`}
                             />
                         </div>
 
@@ -475,7 +480,8 @@ const SignUp = () => {
                                             setValue("authCode", "");
                                         }
                                     })}
-                                    className={`flex-1 px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('verificationEmail')}`}
+                                    readOnly={emailVerified} // 이메일 인증 시 읽기 전용으로 변경
+                                    className={`flex-1 px-4 py-2 border rounded-lg outline-none text-sm font-bold ${emailVerified ? 'bg-gray-100 cursor-not-allowed' : getBorderStyle('verificationEmail')}`}
                                 />
                                 <button
                                     type="button"

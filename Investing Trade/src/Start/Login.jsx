@@ -7,8 +7,21 @@ import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 
+const API_BASE_URL = 'http://52.78.151.56:8080';
+
+// 로그인 전 api
 const publicApi = axios.create({
-  baseURL: 'http://52.78.151.56:8080',
+  baseURL: API_BASE_URL,
+  withCredentials: false,
+  headers: {
+    Accept: '*/*',
+    'Content-Type': 'application/json'
+  }
+});
+
+// 로그인 후 api
+const authApi = axios.create({
+  baseURL: API_BASE_URL,
   withCredentials: false,
   headers: {
     Accept: '*/*',
@@ -37,25 +50,37 @@ const Login = () => {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('grantType');
-      delete axios.defaults.headers.common['Authorization'];
+      localStorage.removeItem('userId');
+      localStorage.removeItem('email');
 
-      const signInResponse = await publicApi.post(
-        '/user/sign-in',
-        {
-          email: data.email.trim(),
-          password: data.password.trim()
-        }
-      );
+      delete publicApi.defaults.headers.common['Authorization'];
+      delete authApi.defaults.headers.common['Authorization'];
+
+      const requestBody = {
+        email: data.email.trim(),
+        password: data.password
+      };
+
+      console.log("[sign-in] 최종 요청 body:", requestBody);
+
+      const signInResponse = await publicApi.post('/user/sign-in', requestBody);
 
       const resData = signInResponse.data;
 
       console.log("서버 응답 데이터:", resData);
 
       const tokenData = resData?.data?.jwtToken;
+      const isSuccess = String(resData?.status || '').toLowerCase() === 'success';
 
-      if (!tokenData?.grantType || !tokenData?.accessToken || !tokenData?.refreshToken) {
-        console.error("Token structure mismatch:", resData);
-        alert("인증 정보가 유효하지 않습니다. 다시 시도해주세요.");
+      if (
+        !isSuccess ||
+        !tokenData ||
+        !tokenData.grantType ||
+        !tokenData.accessToken ||
+        !tokenData.refreshToken
+      ) {
+        console.error("로그인 응답 구조 또는 상태 이상:", resData);
+        alert(resData?.message || "로그인에 실패했습니다.");
         return;
       }
 
@@ -66,24 +91,26 @@ const Login = () => {
       localStorage.setItem('grantType', grantType);
 
       // 이후 모든 API 요청에 사용할 공통 인증 헤더 설정
-      axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
+      authApi.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
 
       // 로그인 성공 후 사용자 정보 조회
       try {
-        const meResponse = await axios.get('/user/me', {
+        const meResponse = await authApi.get('/user/me', {
           headers: {
             Authorization: `${grantType} ${accessToken}`
           }
         });
-
         const userData = meResponse?.data?.data;
 
-        if (userData) {
+        if (userData?.userId && userData?.email) {
           localStorage.setItem('userId', String(userData.userId));
           localStorage.setItem('email', userData.email);
         }
       } catch (meError) {
         console.error("사용자 정보 조회 실패:", meError.response?.data || meError);
+
+        const meErrorData = meError.response?.data;
+        console.warn("user/me 응답 메시지:", meErrorData?.message || meError.message);
       }
 
       alert("로그인 성공!");
@@ -91,14 +118,19 @@ const Login = () => {
 
     } catch (error) {
       // 서버 에러(C999 등) 및 네트워크 오류 처리
-      console.error("Login Error:", error.response?.data || error);
+      console.error("[sign-in] 예외 발생:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
 
       const errorData = error.response?.data;
+
       const msg =
         errorData?.message ||
         errorData?.data?.message ||
         error.message ||
-        "서버 통신 중 오류가 발생했습니다.";
+        `로그인 요청 실패 (${error.response?.status || 'unknown'})`;
 
       alert(msg);
     }
