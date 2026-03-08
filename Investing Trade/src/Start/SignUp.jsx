@@ -27,6 +27,7 @@ const SignUp = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isVerifyingCode, setIsVerifyingCode] = useState(false);
     const [emailVerified, setEmailVerified] = useState(false);
+    const [verifiedEmail, setVerifiedEmail] = useState("");
     const [isSendingCode, setIsSendingCode] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
@@ -47,33 +48,74 @@ const SignUp = () => {
     // 인증번호 발송 함수: /user/email/send-verification
 
     const handleSendCode = async () => {
+        const rawEmail = watch("verificationEmail");
         const isEmailValid = await trigger("verificationEmail");
-        const email = (watch("verificationEmail") || "").trim();
+        const email = (rawEmail || "").trim().toLowerCase();
+        const signUpEmail = (watch("email") || "").trim().toLowerCase();
+
+        console.log("[send-verification] 입력 원본 email:", rawEmail);
+        console.log("[send-verification] 정규화 후 email:", email);
+        console.log("[send-verification] 이메일 유효성 결과:", isEmailValid);
+        console.log("[send-verification] email 길이:", email.length);
+        console.log("[send-verification] email 문자코드:", [...email].map(ch => ({
+            char: ch,
+            code: ch.charCodeAt(0)
+        })));
 
         if (!email || !isEmailValid) {
+            console.log("[send-verification] 요청 중단 - 이메일 형식 오류 또는 빈값");
             alert("인증번호를 받을 이메일을 올바르게 입력해주세요.");
             return;
         }
-
-        if (isSendingCode) return;
+        if (signUpEmail && signUpEmail !== email) {
+            alert("회원가입 이메일과 인증용 이메일을 동일하게 입력해주세요.");
+            return;
+        }
+        if (isSendingCode) {
+            console.log("[send-verification] 요청 중단 - 이미 전송 중");
+            return;
+        }
 
         try {
             setIsSendingCode(true);
+            setEmailVerified(false);
+            setVerifiedEmail("");
+            setIsCodeSent(false);
+            setTimer(0);
+            clearErrors("authCode");
+            setValue("authCode", "");
 
-            const response = await publicApi.post(
+            console.log("[send-verification] 최종 요청 params:", { email });
+            console.log("[send-verification] 요청 방식:", {
+                method: "POST",
+                url: "/user/email/send-verification",
+                params: { email },
+                headers: {
+                    Accept: "*/*"
+                }
+            });
+
+            const sendRes = await publicApi.post(
                 '/user/email/send-verification',
                 null,
                 {
-                    params: { email }
+                    params: { email },
+                    headers: {
+                        Accept: '*/*'
+                    }
                 }
             );
 
-            const result = response.data;
+            const result = sendRes.data;
+
+            console.log("[send-verification] HTTP 상태코드:", sendRes.status);
+            console.log("[send-verification] 전체 응답:", result);
 
             if (
-                response.status === 200 &&
-                (result?.status?.toUpperCase() === "SUCCESS" || result?.code === "200")
+                sendRes.status === 200 &&
+                result?.status?.toLowerCase() === "success"
             ) {
+                console.log("[send-verification] 인증번호 발송 성공 처리 진입");
                 setIsCodeSent(true);
                 setTimer(180);
                 setEmailVerified(false);
@@ -81,15 +123,38 @@ const SignUp = () => {
                 setValue("authCode", "");
                 alert(result?.message || "인증번호가 발송되었습니다.");
             } else {
+                console.log("[send-verification] 인증번호 발송 실패 처리 진입");
+                console.log("[send-verification] 실패 원인 분석용 데이터:", {
+                    statusCode: sendRes.status,
+                    resultStatus: result?.status,
+                    resultCode: result?.code,
+                    resultMessage: result?.message,
+                    resultData: result?.data
+                });
+
+                setIsCodeSent(false);
+                setTimer(0);
+
                 alert(
-                    `[${result?.code || response.status}] ${result?.message || "인증번호 발송에 실패했습니다."}`
+                    `[${result?.code || sendRes.status}] ${result?.message || "인증번호 발송에 실패했습니다."}`
                 );
             }
         } catch (error) {
             const errorData = error.response?.data;
-            console.log("send-verification error:", error);
+
+            console.log("[send-verification] 예외 응답:", {
+                status: error.response?.status,
+                data: errorData,
+                message: error.message
+            });
+
+            setIsCodeSent(false);
+            setTimer(0);
+            setEmailVerified(false);
+            setVerifiedEmail("");
+
             alert(
-                `[${errorData?.code || 'Error'}] ${errorData?.message || "인증번호 발송 중 오류가 발생했습니다."}`
+                `[${errorData?.code || error.response?.status || 'Error'}] ${errorData?.message || "인증번호 발송 중 오류가 발생했습니다."}`
             );
         } finally {
             setIsSendingCode(false);
@@ -100,35 +165,63 @@ const SignUp = () => {
     const handleVerifyCode = async () => {
         const isEmailValid = await trigger("verificationEmail");
         const isCodeValid = await trigger("authCode");
+        const email = (vEmail || "").trim().toLowerCase();
+        const authCode = (watch("authCode") || "").trim();
 
-        if (!vEmail || !isEmailValid || !isCodeValid) {
+        console.log("[email-verify] verificationEmail 원본:", vEmail);
+        console.log("[email-verify] authCode 원본:", watch("authCode"));
+        console.log("[email-verify] 이메일 유효성:", isEmailValid);
+        console.log("[email-verify] 코드 유효성:", isCodeValid);
+        console.log("[email-verify] 정규화 후 email:", email);
+        console.log("[email-verify] email 길이:", email.length);
+        console.log("[email-verify] email 문자코드:", [...email].map(ch => ({
+            char: ch,
+            code: ch.charCodeAt(0)
+        })));
+
+        if (!email || !isEmailValid || !isCodeValid) {
+            console.log("[email-verify] 요청 중단 - 입력값 검증 실패");
             alert("입력 정보를 다시 확인해주세요.");
             return;
         }
 
         try {
             setIsVerifyingCode(true);
-            const email = (vEmail || "").trim();
-            const authCode = (watch("authCode") || "").trim();
+
+            console.log("[email-verify] 최종 요청 body:", {
+                email,
+                code: authCode
+            });
 
             const verifyRes = await publicApi.post('/user/email/verify', {
                 email,
                 code: authCode
             });
 
+            console.log("[email-verify] HTTP 상태코드:", verifyRes.status);
+            console.log("[email-verify] 전체 응답:", verifyRes.data);
+
             const verifyResult = verifyRes.data?.data;
 
             if (
                 verifyRes.status === 200 &&
-                (verifyRes.data.status?.toUpperCase() === "SUCCESS" || verifyRes.data.code === "200") &&
                 verifyResult?.verified === true
             ) {
+                console.log("[email-verify] 이메일 인증 성공");
                 setEmailVerified(true);
+                setVerifiedEmail(email);
                 clearErrors("authCode");
                 alert(verifyResult?.message || "이메일 인증이 완료되었습니다.");
             } else {
-                // 인증 실패 시 (대안 흐름: 오류 메시지 표시)
+                console.log("[email-verify] 이메일 인증 실패", {
+                    status: verifyRes.data?.status,
+                    code: verifyRes.data?.code,
+                    message: verifyRes.data?.message,
+                    data: verifyRes.data?.data
+                });
+
                 setEmailVerified(false);
+                setVerifiedEmail("");
                 setError("authCode", {
                     type: "manual",
                     message: verifyResult?.message || "인증번호가 올바르지 않습니다."
@@ -137,7 +230,14 @@ const SignUp = () => {
             }
         } catch (error) {
             const errorData = error.response?.data;
+            console.log("[email-verify] 예외 응답:", {
+                status: error.response?.status,
+                data: errorData,
+                message: error.message
+            });
+
             setEmailVerified(false);
+            setVerifiedEmail("");
             setError("authCode", {
                 type: "manual",
                 message: errorData?.message || "인증 확인 중 오류가 발생했습니다."
@@ -175,31 +275,55 @@ const SignUp = () => {
 
     // 최종 회원가입 제출 함수: UML의 '회원가입 요청' 흐름 
     const onSubmit = async (data) => {
-        // 1. 최종 상태 확인 (인증 여부 등)
+        const normalizedSignUpEmail = (data.email || "").trim().toLowerCase();
+        const normalizedVerificationEmail = (data.verificationEmail || "").trim().toLowerCase();
+
+        console.log("[sign-up] 제출 원본 데이터:", data);
+        console.log("[sign-up] emailVerified 상태:", emailVerified);
+        console.log("[sign-up] 정규화 후 회원가입 email:", normalizedSignUpEmail);
+        console.log("[sign-up] 정규화 후 인증용 email:", normalizedVerificationEmail);
+        console.log("[sign-up] verifiedEmail 상태값:", verifiedEmail);
+
         if (!emailVerified) {
+            console.log("[sign-up] 중단 - 이메일 인증 미완료");
             alert("이메일 인증을 먼저 완료해주세요.");
             return;
         }
 
-        if (data.email.trim() !== data.verificationEmail.trim()) {
+        if (normalizedSignUpEmail !== normalizedVerificationEmail) {
+            console.log("[sign-up] 중단 - 회원가입 이메일과 인증용 이메일 불일치", {
+                signUpEmail: normalizedSignUpEmail,
+                verificationEmail: normalizedVerificationEmail
+            });
             alert("회원가입 이메일과 인증용 이메일이 일치해야 합니다.");
+            return;
+        }
+
+        if (normalizedSignUpEmail !== verifiedEmail) {
+            console.log("[sign-up] 중단 - 인증 완료된 이메일과 회원가입 이메일 불일치", {
+                signUpEmail: normalizedSignUpEmail,
+                verifiedEmail
+            });
+            alert("인증 완료된 이메일과 회원가입 이메일이 일치해야 합니다.");
             return;
         }
 
         try {
             setIsSubmitting(true);
 
-            // 2. createAccount(info) 호출
-            const signUpRes = await publicApi.post('/user/sign-up', {
-                email: data.email.trim(),
-                password: data.password
-            });
+            const requestBody = {
+                email: normalizedSignUpEmail,
+                password: (data.password || "").trim()
+            };
 
-            // 3. 성공 시: 회원가입 성공 -> 로그인 화면 이동
-            if (
-                signUpRes.status === 200 &&
-                (signUpRes.data.status?.toUpperCase() === "SUCCESS" || signUpRes.data.code === "200")
-            ) {
+            console.log("[sign-up] 최종 요청 body:", requestBody);
+
+            const signUpRes = await publicApi.post('/user/sign-up', requestBody);
+
+            console.log("[sign-up] HTTP 상태코드:", signUpRes.status);
+            console.log("[sign-up] 전체 응답:", signUpRes.data);
+
+            if (signUpRes.status === 200) {
                 alert("회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.");
                 navigate('/login');
             } else {
@@ -207,6 +331,12 @@ const SignUp = () => {
             }
         } catch (error) {
             const serverError = error.response?.data;
+            console.log("[sign-up] 예외 응답:", {
+                status: error.response?.status,
+                data: serverError,
+                message: error.message
+            });
+
             alert(`[${serverError?.code || 'Error'}] ${serverError?.message || "오류가 발생했습니다."}`);
         } finally {
             setIsSubmitting(false);
@@ -214,7 +344,7 @@ const SignUp = () => {
     };
 
     // 정규식 설정
-    const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
+    const authRegex = /^.{8,}$/;
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
     // 실시간 테두리 색상 제어 함수
@@ -338,6 +468,7 @@ const SignUp = () => {
                                         pattern: { value: emailRegex, message: "형식 오류" },
                                         onChange: () => {
                                             setEmailVerified(false);
+                                            setVerifiedEmail("");
                                             setIsCodeSent(false);
                                             setTimer(0);
                                             clearErrors("authCode");
@@ -368,7 +499,9 @@ const SignUp = () => {
                                         placeholder="인증번호 6자리를 입력해주세요."
                                         {...register("authCode", {
                                             required: "인증번호를 입력해주세요.",
-                                            minLength: { value: 6, message: "6자리를 입력해주세요." }
+                                            minLength: { value: 6, message: "6자리를 입력해주세요." },
+                                            maxLength: { value: 6, message: "6자리만 입력해주세요." },
+                                            pattern: { value: /^\d{6}$/, message: "숫자 6자리를 입력해주세요." }
                                         })}
                                         className={`w-full px-4 py-2 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('authCode')}`}
                                     />

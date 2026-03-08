@@ -7,7 +7,14 @@ import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 
-axios.defaults.baseURL = 'http://52.78.151.56:8080';
+const publicApi = axios.create({
+  baseURL: 'http://52.78.151.56:8080',
+  withCredentials: false,
+  headers: {
+    Accept: '*/*',
+    'Content-Type': 'application/json'
+  }
+});
 
 const Login = () => {
   const navigate = useNavigate();
@@ -26,70 +33,74 @@ const Login = () => {
   });
 
   const onSubmit = async (data) => {
-
     try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('grantType');
+      delete axios.defaults.headers.common['Authorization'];
 
-      const response = await axios({
-        method: 'post',
-        url: '/user/sign-in',
-        data: {
+      const signInResponse = await publicApi.post(
+        '/user/sign-in',
+        {
           email: data.email.trim(),
-          password: data.password
-        },
-        headers: {
-          'Content-Type': 'application/json'
+          password: data.password.trim()
         }
-      });
+      );
 
+      const resData = signInResponse.data;
 
-      const resData = response.data;
-
-      // [디버깅] 이 로그가 찍히는지 확인하세요. 안 찍힌다면 통신 자체가 실패한 것입니다.
       console.log("서버 응답 데이터:", resData);
 
-      // 3. 토큰 데이터가 있는지 안전하게 확인
       const tokenData = resData?.data?.jwtToken;
 
-      // 4. 모든 검증(토큰 존재 여부) 통과 후 저장 및 이동
-      if (tokenData && tokenData.accessToken) {
-        const { grantType, accessToken, refreshToken } = tokenData;
-
-        // 로컬 스토리지 저장
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        localStorage.setItem('grantType', grantType);
-
-        // 이후 모든 API 요청에 사용할 공통 인증 헤더 설정
-        axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
-
-        // 로그인 성공 후 사용자 정보 조회
-        try {
-          const meResponse = await axios.get('/user/me');
-          const userData = meResponse?.data?.data;
-
-          if (userData) {
-            localStorage.setItem('userId', String(userData.userId));
-            localStorage.setItem('email', userData.email);
-          }
-        } catch (meError) {
-          console.error("사용자 정보 조회 실패:", meError.response?.data || meError);
-        }
-
-        alert("로그인 성공!");
-        navigate('/main');
-      } else {
+      if (!tokenData?.grantType || !tokenData?.accessToken || !tokenData?.refreshToken) {
         console.error("Token structure mismatch:", resData);
         alert("인증 정보가 유효하지 않습니다. 다시 시도해주세요.");
+        return;
       }
+
+      const { grantType, accessToken, refreshToken } = tokenData;
+
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('grantType', grantType);
+
+      // 이후 모든 API 요청에 사용할 공통 인증 헤더 설정
+      axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
+
+      // 로그인 성공 후 사용자 정보 조회
+      try {
+        const meResponse = await axios.get('/user/me', {
+          headers: {
+            Authorization: `${grantType} ${accessToken}`
+          }
+        });
+
+        const userData = meResponse?.data?.data;
+
+        if (userData) {
+          localStorage.setItem('userId', String(userData.userId));
+          localStorage.setItem('email', userData.email);
+        }
+      } catch (meError) {
+        console.error("사용자 정보 조회 실패:", meError.response?.data || meError);
+      }
+
+      alert("로그인 성공!");
+      navigate('/main');
 
     } catch (error) {
       // 서버 에러(C999 등) 및 네트워크 오류 처리
-      console.error("Login Error:", error.response?.data);
+      console.error("Login Error:", error.response?.data || error);
+
       const errorData = error.response?.data;
       const msg =
         errorData?.message ||
+        errorData?.data?.message ||
         error.message ||
-        "서버 통신 중 오류가 발생했습니다."; alert(msg);
+        "서버 통신 중 오류가 발생했습니다.";
+
+      alert(msg);
     }
   };
 
