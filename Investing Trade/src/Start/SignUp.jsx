@@ -5,11 +5,19 @@ import paperplane from '../assets/paper-plane.png';
 import { useForm } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 
 // 백엔드 서버 주소 설정
 const API_BASE_URL = 'http://52.78.151.56:8080';
-axios.defaults.baseURL = API_BASE_URL;
+
+const publicApi = axios.create({
+    baseURL: API_BASE_URL,
+    withCredentials: false,
+    headers: {
+        Accept: '*/*'
+    }
+});
 
 const SignUp = () => {
     const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
@@ -19,6 +27,9 @@ const SignUp = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isVerifyingCode, setIsVerifyingCode] = useState(false);
     const [emailVerified, setEmailVerified] = useState(false);
+    const [isSendingCode, setIsSendingCode] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
     // 타이머 기능
     useEffect(() => {
@@ -34,77 +45,106 @@ const SignUp = () => {
     }, [isCodeSent, timer]);
 
     // 인증번호 발송 함수: /user/email/send-verification
+
     const handleSendCode = async () => {
         const isEmailValid = await trigger("verificationEmail");
+        const email = (watch("verificationEmail") || "").trim();
 
-        if (!vEmail || !isEmailValid) {
+        if (!email || !isEmailValid) {
             alert("인증번호를 받을 이메일을 올바르게 입력해주세요.");
             return;
         }
 
+        if (isSendingCode) return;
+
         try {
-            const response = await axios.post('/user/email/send-verification', null, {
-                params: { email: vEmail }
-            });
+            setIsSendingCode(true);
+
+            const response = await publicApi.post(
+                '/user/email/send-verification',
+                '',
+                {
+                    params: { email },
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                }
+            );
+
+            const result = response.data;
+
+            console.log("send-verification status:", response.status);
+            console.log("send-verification headers:", response.headers);
+            console.log("send-verification body:", result);
 
             if (
-                response.data.status?.toUpperCase() === "SUCCESS" ||
-                response.data.code === "200"
+                response.status === 200 &&
+                (result?.status?.toLowerCase() === "success" || result?.code === "200")
             ) {
                 setIsCodeSent(true);
                 setTimer(180);
                 setEmailVerified(false);
                 clearErrors("authCode");
-                alert("인증번호가 발송되었습니다.");
+                setError("authCode", {});
+                alert(result?.message || "인증번호가 발송되었습니다.");
             } else {
-                alert(`[${response.data.code}] ${response.data.message}`);
+                alert(
+                    `[${result?.code || response.status}] ${result?.message || "인증번호 발송에 실패했습니다."}`
+                );
             }
         } catch (error) {
             const errorData = error.response?.data;
-            alert(`${errorData?.message || "서버 오류"} (${errorData?.code || "C999"})`);
-            console.error("인증번호 발송 에러 상세:", errorData);
+
+            console.log("send-verification error status:", error.response?.status);
+            console.log("send-verification error headers:", error.response?.headers);
+            console.log("send-verification error body:", errorData);
+
+            alert(
+                `[${errorData?.code || error.response?.status || "ERROR"}] ${errorData?.message || "인증번호 발송 중 오류가 발생했습니다."
+                }`
+            );
+        } finally {
+            setIsSendingCode(false);
         }
     };
 
+    // [보완] 인증번호 확인 함수: API 응답 결과(verified)를 상태에 엄격히 반영
     const handleVerifyCode = async () => {
         const isEmailValid = await trigger("verificationEmail");
         const isCodeValid = await trigger("authCode");
 
-        if (!vEmail || !isEmailValid) {
-            alert("인증용 이메일을 올바르게 입력해주세요.");
-            return;
-        }
-
-        if (!isCodeValid) {
-            alert("인증번호를 올바르게 입력해주세요.");
+        if (!vEmail || !isEmailValid || !isCodeValid) {
+            alert("입력 정보를 다시 확인해주세요.");
             return;
         }
 
         try {
             setIsVerifyingCode(true);
+            const email = (vEmail || "").trim();
+            const authCode = (watch("authCode") || "").trim();
 
-            const authCode = watch("authCode");
-
-            const verifyRes = await axios.post('/user/email/verify', {
-                email: vEmail,
+            const verifyRes = await publicApi.post('/user/email/verify', {
+                email,
                 code: authCode
             });
 
             const verifyResult = verifyRes.data?.data;
 
             if (
-                verifyRes.data.status?.toUpperCase() === "SUCCESS" &&
-                verifyResult?.verified
+                (verifyRes.data.status?.toUpperCase() === "SUCCESS" || verifyRes.data.code === "200") &&
+                verifyResult?.verified === true
             ) {
                 setEmailVerified(true);
                 clearErrors("authCode");
                 alert(verifyResult?.message || "이메일 인증이 완료되었습니다.");
             } else {
+                // 인증 실패 시 (대안 흐름: 오류 메시지 표시)
                 setEmailVerified(false);
                 setError("authCode", {
                     type: "manual",
                     message: verifyResult?.message || "인증번호가 올바르지 않습니다."
                 });
+                alert(verifyResult?.message || "인증에 실패했습니다.");
             }
         } catch (error) {
             const errorData = error.response?.data;
@@ -143,31 +183,36 @@ const SignUp = () => {
     const passwordValue = watch("password");
     const vEmail = watch("verificationEmail");
 
-    // [수정] 제출 핸들러: 인증 확인 후 회원가입 및 데이터 매핑 최적화
+    // 최종 회원가입 제출 함수: UML의 '회원가입 요청' 흐름 
     const onSubmit = async (data) => {
+        // 1. 최종 상태 확인 (인증 여부 등)
         if (!emailVerified) {
             alert("이메일 인증을 먼저 완료해주세요.");
+            return;
+        }
+
+        if (data.email.trim() !== data.verificationEmail.trim()) {
+            alert("회원가입 이메일과 인증용 이메일이 일치해야 합니다.");
             return;
         }
 
         try {
             setIsSubmitting(true);
 
+            // 2. createAccount(info) 호출
             const signUpRes = await axios.post('/user/sign-up', {
-                email: data.email,
+                email: data.email.trim(),
                 password: data.password
             });
 
-            if (
-                signUpRes.data.status?.toUpperCase() === "SUCCESS" ||
-                signUpRes.data.code === "200"
-            ) {
+            // 3. 성공 시: 회원가입 성공 -> 로그인 화면 이동
+            if (signUpRes.data.status?.toUpperCase() === "SUCCESS" || signUpRes.data.code === "200") {
                 alert("회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.");
                 navigate('/login');
-                return;
+            } else {
+                // 4. 실패 시: 오류 메시지 표시 (대안 흐름)
+                alert(signUpRes.data.message || "회원가입에 실패했습니다.");
             }
-
-            alert(signUpRes.data.message || "회원가입에 실패했습니다.");
         } catch (error) {
             const serverError = error.response?.data;
             alert(`[${serverError?.code || 'Error'}] ${serverError?.message || "오류가 발생했습니다."}`);
@@ -241,33 +286,51 @@ const SignUp = () => {
                         {/* 비밀번호 필드 */}
                         <div className="space-y-3">
                             <p className='font-bold text-lg'>비밀번호</p>
-                            <input
-                                type="password"
-                                placeholder="비밀번호를 입력해주세요."
-                                {...register("password", {
-                                    required: "비밀번호를 입력해주세요.",
-                                    pattern: {
-                                        value: authRegex,
-                                        message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)"
-                                    }
-                                })}
-                                className={`w-full px-4 py-2 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('password')}`}
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="비밀번호를 입력해주세요."
+                                    {...register("password", {
+                                        required: "비밀번호를 입력해주세요.",
+                                        pattern: {
+                                            value: authRegex,
+                                            message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)"
+                                        }
+                                    })}
+                                    className={`w-full px-4 py-2 pr-12 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('password')}`}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((prev) => !prev)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
                             {errors.password && <p className="text-red-500 text-xs font-bold">{errors.password.message}</p>}
                         </div>
 
                         {/* 비밀번호 확인 필드 */}
                         <div className="space-y-3">
                             <p className='font-bold text-lg'>비밀번호 확인</p>
-                            <input
-                                type="password"
-                                placeholder="비밀번호를 다시 입력해주세요."
-                                {...register("passwordConfirm", {
-                                    required: "비밀번호 확인을 입력해주세요.",
-                                    validate: (value) => value === passwordValue || "비밀번호가 일치하지 않습니다."
-                                })}
-                                className={`w-full px-4 py-2 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('passwordConfirm')}`}
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPasswordConfirm ? "text" : "password"}
+                                    placeholder="비밀번호를 다시 입력해주세요."
+                                    {...register("passwordConfirm", {
+                                        required: "비밀번호 확인을 입력해주세요.",
+                                        validate: (value) => value === passwordValue || "비밀번호가 일치하지 않습니다."
+                                    })}
+                                    className={`w-full px-4 py-2 pr-12 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('passwordConfirm')}`}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPasswordConfirm((prev) => !prev)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                >
+                                    {showPasswordConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
                             {errors.passwordConfirm && <p className="text-red-500 text-xs font-bold">{errors.passwordConfirm.message}</p>}
                         </div>
 
@@ -280,16 +343,23 @@ const SignUp = () => {
                                     placeholder="인증번호를 받을 이메일"
                                     {...register("verificationEmail", {
                                         required: "인증용 이메일을 입력해주세요.",
-                                        pattern: { value: emailRegex, message: "형식 오류" }
+                                        pattern: { value: emailRegex, message: "형식 오류" },
+                                        onChange: () => {
+                                            setEmailVerified(false);
+                                            setIsCodeSent(false);
+                                            setTimer(0);
+                                            clearErrors("authCode");
+                                        }
                                     })}
                                     className={`flex-1 px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('verificationEmail')}`}
                                 />
                                 <button
-                                    type="button" // submit 방지
+                                    type="button"
                                     onClick={handleSendCode}
-                                    className="bg-blue-600 text-white px-4 py-2 cursor-pointer rounded-lg text-xs font-bold hover:bg-blue-400 transition-all"
+                                    disabled={isSendingCode}
+                                    className="bg-blue-600 text-white px-4 py-2 cursor-pointer rounded-lg text-xs font-bold hover:bg-blue-400 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
                                 >
-                                    {isCodeSent ? "재전송" : "인증번호 전송"}
+                                    {isSendingCode ? "전송 중..." : isCodeSent ? "재전송" : "인증번호 전송"}
                                 </button>
                             </div>
                             {errors.verificationEmail && <p className="text-red-500 text-xs font-bold">{errors.verificationEmail.message}</p>}
