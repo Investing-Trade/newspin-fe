@@ -500,10 +500,7 @@ const SignUp = () => {
                                         type="text"
                                         placeholder="인증번호 6자리를 입력해주세요."
                                         {...register("authCode", {
-                                            required: "인증번호를 입력해주세요.",
-                                            minLength: { value: 6, message: "6자리를 입력해주세요." },
-                                            maxLength: { value: 6, message: "6자리만 입력해주세요." },
-                                            pattern: { value: /^\d{6}$/, message: "숫자 6자리를 입력해주세요." }
+                                            required: "인증번호를 입력해주세요."
                                         })}
                                         className={`w-full px-4 py-2 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('authCode')}`}
                                     />
