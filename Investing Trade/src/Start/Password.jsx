@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { Eye, EyeOff } from 'lucide-react';
 
 // 백엔드 서버 주소 설정
 axios.defaults.baseURL = 'http://52.78.151.56:8080';
@@ -14,6 +15,8 @@ const Password = () => {
   const navigate = useNavigate();
   const [isCodeSent, setIsCodeSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
 
   useEffect(() => {
     document.title = "NewsPin - Password";
@@ -63,9 +66,9 @@ const Password = () => {
         const response = await sendResetCode(data.email);
 
         const isSuccess =
-          response.data?.success === true ||
-          response.data?.status?.toLowerCase() === "success" ||
-          response.data?.code?.toUpperCase() === "SUCCESS";
+          response.status === 200 &&
+          String(response.data?.status || "").toLowerCase() === "success";
+
         if (isSuccess) {
           alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
           setIsCodeSent(true);
@@ -80,9 +83,8 @@ const Password = () => {
         );
 
         const isSuccess =
-          response.data?.success === true ||
-          response.data?.status?.toUpperCase() === "SUCCESS" ||
-          response.data?.code?.toUpperCase() === "SUCCESS";
+          response.status === 200 &&
+          String(response.data?.status || "").toLowerCase() === "success";
 
         if (isSuccess) {
           alert("비밀번호가 성공적으로 변경되었습니다. 로그인 페이지로 이동합니다.");
@@ -180,29 +182,47 @@ const Password = () => {
 
                 <div className="space-y-2">
                   <p className='font-jua text-lg pb-1'>새로운 비밀번호</p>
-                  <input
-                    type="password"
-                    placeholder="새로운 비밀번호를 입력해주세요."
-                    {...register("newPassword", {
-                      required: "새 비밀번호를 입력해주세요.",
-                      pattern: { value: authRegex, message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)" }
-                    })}
-                    className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPassword')}`}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      placeholder="새로운 비밀번호를 입력해주세요."
+                      {...register("newPassword", {
+                        required: "새 비밀번호를 입력해주세요.",
+                        pattern: { value: authRegex, message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)" }
+                      })}
+                      className={`w-full px-4 py-3 pr-12 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPassword')}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                   {errors.newPassword && <p className="text-red-500 text-xs font-bold">{errors.newPassword.message}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <p className='font-jua text-lg pb-1'>비밀번호 확인</p>
-                  <input
-                    type="password"
-                    placeholder="비밀번호를 다시 입력해주세요."
-                    {...register("newPasswordConfirm", {
-                      required: "확인을 위해 다시 입력해주세요.",
-                      validate: (val) => val === newPasswordValue || "비밀번호가 일치하지 않습니다."
-                    })}
-                    className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPasswordConfirm')}`}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPasswordConfirm ? "text" : "password"}
+                      placeholder="비밀번호를 다시 입력해주세요."
+                      {...register("newPasswordConfirm", {
+                        required: "확인을 위해 다시 입력해주세요.",
+                        validate: (val) => val === newPasswordValue || "비밀번호가 일치하지 않습니다."
+                      })}
+                      className={`w-full px-4 py-3 pr-12 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPasswordConfirm')}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPasswordConfirm(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showNewPasswordConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                   {errors.newPasswordConfirm && <p className="text-red-500 text-xs font-bold">{errors.newPasswordConfirm.message}</p>}
                 </div>
 
