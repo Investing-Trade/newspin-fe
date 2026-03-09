@@ -14,6 +14,8 @@ import exit from '../assets/exit.png';
 import save from '../assets/save.png';
 import { Eye, EyeOff } from 'lucide-react';
 
+let newsPageInitialized = false;
+
 const api = axios.create({
     baseURL: "http://52.78.151.56:8080",
 });
@@ -28,35 +30,20 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
     (res) => res,
-    (error) => {
-        if (error.response?.status === 401 || error.response?.status === 403) {
-            alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
-            localStorage.clear();
-            window.location.href = "/login";
-        }
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
 const News = () => {
     const navigate = useNavigate();
-    const API_BASE_URL = 'http://52.78.151.56:8080';
-
-    const getAuthHeader = () => {
-        const token = localStorage.getItem('accessToken');
-        return token ? { Authorization: `Bearer ${token}` } : {};
-    };
-
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-
     const [newsData, setNewsData] = useState(null);
     const [userComment, setUserComment] = useState("");
     const [selectedSentiment, setSelectedSentiment] = useState(null);
     const [aiResult, setAiResult] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null); // 에러 상태 추가
+    const [error, setError] = useState(null);
 
     const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
     const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
@@ -126,40 +113,75 @@ const News = () => {
 
     // 랜덤 뉴스 불러오기 (GET /news/random)
     const fetchRandomNews = async () => {
-        const authHeader = getAuthHeader();
+        const token = localStorage.getItem('accessToken');
 
-        // 토큰이 없으면 요청을 보내지 않고 로그인으로 보냄 (403 원천 차단)
-        if (!authHeader.Authorization) {
+        if (!token) {
             navigate('/login');
             return;
         }
 
         setLoading(true);
-        try {
-            const response = await api.get('/news/random');
+        setError(null);
 
-            // 서버의 공통 응답 규격(SUCCESS) 확인
-            if (response.data.status?.toUpperCase() === "SUCCESS") {
-                if (response.data.data) {
+        try {
+            console.log("[news/random] 요청 토큰:", token);
+            console.log("[news/random] 요청 URL:", "http://52.78.151.56:8080/news/random");
+
+            const response = await api.get('/news/random', {
+                headers: {
+                    Accept: '*/*'
+                }
+            });
+
+            console.log("[news/random] 응답:", response.data);
+
+            if (String(response.data?.status || "").toUpperCase() === "SUCCESS") {
+                if (response.data?.data) {
                     setNewsData(response.data.data);
+                    setAiResult(null);
+                    setUserComment("");
+                    setSelectedSentiment(null);
                 } else {
-                    // 서버 응답은 성공이나 데이터가 없는 경우
                     setNewsData(null);
+                    setAiResult(null);
+                    setUserComment("");
+                    setSelectedSentiment(null);
                     setError("데이터가 존재하지 않습니다.");
                 }
+            } else {
+                setNewsData(null);
                 setAiResult(null);
                 setUserComment("");
                 setSelectedSentiment(null);
+                setError(response.data?.message || "뉴스를 불러오지 못했습니다.");
             }
         } catch (error) {
-            if (error.response?.status === 403) {
-                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+            const status = error.response?.status;
+
+            console.error("[news/random] 실패 상세:", {
+                status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                message: error.message
+            });
+
+            if (status === 404) {
+                setNewsData(null);
+                setAiResult(null);
+                setUserComment("");
+                setSelectedSentiment(null);
+                setError(error.response?.data?.message || "뉴스를 찾을 수 없습니다.");
+            } else if (status === 403) {
+                alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
                 localStorage.clear();
                 navigate('/login');
             } else {
-                setError("데이터가 존재하지 않습니다."); // 네트워크 에러 등 예외 발생 시
+                setNewsData(null);
+                setAiResult(null);
+                setUserComment("");
+                setSelectedSentiment(null);
+                setError(error.response?.data?.message || "뉴스를 불러오는 중 오류가 발생했습니다.");
             }
-            console.error("뉴스 로딩 실패:", error);
         } finally {
             setLoading(false);
         }
@@ -169,23 +191,48 @@ const News = () => {
     const handleSubmitOpinion = async () => {
         if (!newsData?.newsId) return;
 
-        const authHeader = getAuthHeader();
+        if (!selectedSentiment) {
+            alert("호재 또는 악재를 먼저 선택해주세요.");
+            return;
+        }
+
+        if (!userComment.trim()) {
+            alert("판단 근거를 입력해주세요.");
+            return;
+        }
+
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+
         const requestData = {
-            sentiment: selectedSentiment, // POSITIVE, NEGATIVE, NEUTRAL
+            sentiment: selectedSentiment,
             reason: userComment.trim()
         };
 
         try {
             const response = await api.post(
                 `/news/${newsData.newsId}/analyze`,
-                requestData
+                requestData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        Accept: '*/*',
+                        'Content-Type': 'application/json'
+                    }
+                }
             );
 
-            if (response.data.status?.toUpperCase() === "SUCCESS") {
+            if (String(response.data?.status || "").toUpperCase() === "SUCCESS") {
                 setAiResult(response.data.data);
+            } else {
+                alert(response.data?.message || "분석에 실패했습니다.");
             }
         } catch (error) {
             console.error("분석 실패:", error);
+            alert(error.response?.data?.message || "분석 중 오류가 발생했습니다.");
         }
     };
 
@@ -195,6 +242,7 @@ const News = () => {
         } catch (e) {
             console.error("로그아웃 API 호출 실패", e);
         } finally {
+            newsPageInitialized = false;
             localStorage.clear();
             navigate('/login');
         }
@@ -202,6 +250,7 @@ const News = () => {
 
     useEffect(() => {
         document.title = "NewsPin - News";
+
         const token = localStorage.getItem('accessToken');
         if (!token) {
             navigate('/login');
@@ -209,7 +258,11 @@ const News = () => {
         }
 
         fetchUserInfo();
-        fetchRandomNews();
+
+        if (!newsPageInitialized) {
+            newsPageInitialized = true;
+            fetchRandomNews();
+        }
     }, []);
 
     return (
