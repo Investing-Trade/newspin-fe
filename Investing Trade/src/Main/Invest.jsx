@@ -15,6 +15,16 @@ import axios from 'axios';
 import save from '../assets/save.png';
 import { Eye, EyeOff } from 'lucide-react';
 
+const API_BASE_URL = 'http://52.78.151.56:8080';
+
+const privateApi = axios.create({
+    baseURL: API_BASE_URL,
+    withCredentials: false,
+    headers: {
+        Accept: '*/*'
+    }
+});
+
 const Invest = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -46,11 +56,11 @@ const Invest = () => {
         }
 
         try {
-            const response = await axios.get('/user/me', {
+            const response = await privateApi.get('/user/me', {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            if (response.data.status.toLowerCase() === "success") {
+            if (String(response.data?.status || "").toLowerCase() === "success") {
                 const { userId, email } = response.data.data;
 
                 const savedPwd = localStorage.getItem('userPwd') || "********";
@@ -73,7 +83,7 @@ const Invest = () => {
     const handleUpdateInfo = async () => {
         try {
             const token = localStorage.getItem('accessToken');
-            const response = await axios.patch('/user/me', {
+            const response = await privateApi.patch('/user/me', {
                 userId: editData.userId,
                 email: editData.email,
                 password: editData.password
@@ -103,7 +113,7 @@ const Invest = () => {
     const handleLogout = async () => {
         try {
             const token = localStorage.getItem('accessToken');
-            await axios.post('/user/logout', {}, {
+            await privateApi.post('/user/logout', {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
         } catch (error) {
@@ -237,7 +247,7 @@ const Invest = () => {
                                         // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
                                         value={isEditing ? editData.password
                                             : userInfo.password}
-                                        
+
                                         onChange={(e) => setEditData({ ...editData, password: e.target.value })}
                                         readOnly={!isEditing}
                                         placeholder={isEditing ? "새 비밀번호 입력" : ""}
