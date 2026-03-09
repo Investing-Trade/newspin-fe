@@ -498,7 +498,7 @@ const SignUp = () => {
                                 <div className="relative">
                                     <input
                                         type="text"
-                                        placeholder="인증번호 6자리를 입력해주세요."
+                                        placeholder="인증번호를 입력해주세요."
                                         {...register("authCode", {
                                             required: "인증번호를 입력해주세요."
                                         })}
