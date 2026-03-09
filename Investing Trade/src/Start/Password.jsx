@@ -9,7 +9,16 @@ import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
 
 // 백엔드 서버 주소 설정
-axios.defaults.baseURL = 'http://52.78.151.56:8080';
+const API_BASE_URL = 'http://52.78.151.56:8080';
+
+const publicApi = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: false,
+  headers: {
+    Accept: '*/*',
+    'Content-Type': 'application/json'
+  }
+});
 
 const Password = () => {
   const navigate = useNavigate();
@@ -37,23 +46,18 @@ const Password = () => {
 
   // password API
   const sendResetCode = (email) => {
-    return axios({
-      method: 'post',
-      url: '/user/password/send-reset-code',
+    return publicApi.post('/user/password/send-reset-code', null, {
       params: {
-        email: email
+        email: (email || "").trim().toLowerCase()
       }
     });
   };
+
   const resetPassword = (email, code, newPassword) => {
-    return axios({
-      method: 'post',
-      url: '/user/password/reset',
-      data: {
-        email,
-        code,
-        newPassword
-      }
+    return publicApi.post('/user/password/reset', {
+      email: (email || "").trim().toLowerCase(),
+      code: String(code || "").trim(),
+      newPassword
     });
   };
 
