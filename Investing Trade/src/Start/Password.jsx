@@ -54,11 +54,21 @@ const Password = () => {
   };
 
   const resetPassword = (email, code, newPassword) => {
-    return publicApi.post('/user/password/reset', {
-      email: (email || "").trim().toLowerCase(),
-      code: String(code || "").trim(),
-      newPassword
-    });
+    return axios.post(
+      `${API_BASE_URL}/user/password/reset`,
+      {
+        email: (email || "").trim().toLowerCase(),
+        code: String(code || "").trim().toUpperCase(),
+        newPassword: String(newPassword || "")
+      },
+      {
+        withCredentials: false,
+        headers: {
+          Accept: '*/*',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
   };
 
   /// 비밀번호 재설정 통합 제출 핸들러
@@ -178,10 +188,16 @@ const Password = () => {
                   <p className='font-bold font-jua text-lg pb-1 text-blue-600'>인증 코드 입력</p>
                   <input
                     type="text"
-                    placeholder="인증 코드 6자리를 입력해주세요."
-                    {...register("authCode", { required: "인증 코드를 입력해주세요." })}
-                    className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('authCode')}`}
+                    placeholder="이메일로 받은 인증 코드를 입력해주세요."
+                    {...register("authCode", {
+                      required: "인증 코드를 입력해주세요.",
+                      pattern: {
+                        value: /^[A-Za-z0-9]+$/,
+                        message: "영문과 숫자로 된 인증 코드를 입력해주세요."
+                      }
+                    })} className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('authCode')}`}
                   />
+                  {errors.authCode && <p className="text-red-500 text-xs font-bold">{errors.authCode.message}</p>}
                 </div>
 
                 <div className="space-y-2">
