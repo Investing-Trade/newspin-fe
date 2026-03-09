@@ -91,19 +91,14 @@ const SignUp = () => {
                 method: "POST",
                 url: "/user/email/send-verification",
                 params: { email },
-                headers: {
-                    Accept: "*/*"
-                }
             });
 
-            const sendRes = await publicApi.post(
-                '/user/email/send-verification',
-                '',
+            const sendRes = await axios.post(
+                `${API_BASE_URL}/user/email/send-verification?email=${encodeURIComponent(email)}`,
+                null,
                 {
-                    params: { email },
                     headers: {
-                        Accept: '*/*',
-                        'Content-Type': 'application/x-www-form-urlencoded'
+                        Accept: '*/*'
                     }
                 }
             );
@@ -327,7 +322,8 @@ const SignUp = () => {
             console.log("[sign-up] HTTP 상태코드:", signUpRes.status);
             console.log("[sign-up] 전체 응답:", signUpRes.data);
 
-            if (signUpRes.status === 200) {
+            if (signUpRes.status === 200 &&
+                String(signUpRes.data?.status || "").toLowerCase() === "success") {
                 alert("회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.");
                 navigate('/login');
             } else {
