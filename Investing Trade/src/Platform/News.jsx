@@ -21,8 +21,9 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("accessToken");
+    const token = getAccessToken();
     if (token) {
+        config.headers = config.headers ?? {};
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -33,6 +34,44 @@ api.interceptors.response.use(
     (error) => Promise.reject(error)
 );
 
+const getAccessToken = () => {
+    const raw = localStorage.getItem("accessToken");
+    if (!raw) return null;
+
+    const normalize = (t) => {
+        if (!t) return null;
+        const s = String(t).trim();
+        return s.toLowerCase().startsWith("bearer ") ? s.slice(7).trim() : s;
+    };
+
+    try {
+        if (raw.startsWith('"') || raw.startsWith("{") || raw.startsWith("[")) {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed === "string") return normalize(parsed);
+
+            return normalize(
+                parsed?.accessToken ??
+                parsed?.access_token ??
+                parsed?.token ??
+                parsed?.data?.accessToken ??
+                parsed?.data?.token
+            );
+        }
+        return normalize(raw);
+    } catch {
+        return normalize(raw);
+    }
+};
+
+const isSuccess = (data) => {
+    if (!data) return false;
+
+    if (typeof data.status === "string" && data.status.toLowerCase() === "success") return true;
+    if (data.code === 200 || data.code === "200") return true;
+    if (data.success === true) return true;
+
+    return false;
+};
 const News = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -44,7 +83,6 @@ const News = () => {
     const [aiResult, setAiResult] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-
     const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
     const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
 
@@ -53,13 +91,13 @@ const News = () => {
         try {
             const response = await api.get('/user/me');
 
-            if (response.data.status?.toUpperCase() === "SUCCESS") {
-                const { userId, email } = response.data.data;
+            if (isSuccess(response.data)) {
+                const { userId, email } = response.data.data ?? {};
                 const savedPwd = localStorage.getItem("userPwd") || "";
 
                 const fetchedInfo = {
-                    userId,
-                    email,
+                    userId: userId ?? "",
+                    email: email ?? "",
                     password: savedPwd,
                 };
 
@@ -77,6 +115,159 @@ const News = () => {
         }
     };
 
+    const getCurrentSessionId = async () => {
+        const sessions = await fetchSessions();
+        if (!sessions.length) {
+            setError("진행 중인 시뮬레이션 세션이 없습니다.");
+            return null;
+        }
+
+        const sessionId = pickSessionIdToUse(sessions);
+        if (!sessionId) {
+            setError("사용할 수 있는 시뮬레이션 세션이 없습니다.");
+            return null;
+        }
+
+        return sessionId;
+    };
+
+    const loadInitialNews = async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const loaded = await fetchTodayNewsFromSession();
+
+            if (!loaded) {
+                setNewsData(null);
+                setAiResult(null);
+                setUserComment("");
+                setSelectedSentiment(null);
+                setError("오늘 표시할 뉴스가 없습니다.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchSessions = async () => {
+        try {
+            const response = await api.get('/simulation/sessions');
+
+            if (isSuccess(response.data) && Array.isArray(response.data.data)) {
+                return response.data.data;
+            }
+        } catch (error) {
+            console.error("세션 목록 조회 실패:", error);
+        }
+
+        return [];
+    };
+
+    const pickSessionIdToUse = (list) => {
+        const savedSid = localStorage.getItem("simulationSessionId");
+
+        if (savedSid && list.some(s => String(s.sessionId) === String(savedSid))) {
+            return Number(savedSid);
+        }
+
+        const active = list.find(s => String(s.status).toUpperCase() === "ACTIVE");
+        if (active?.sessionId) return Number(active.sessionId);
+
+        const sorted = [...list].sort((a, b) => {
+            const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            if (ad !== bd) return bd - ad;
+            return (Number(b.sessionId) || 0) - (Number(a.sessionId) || 0);
+        });
+
+        return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
+    };
+
+    const handleNextNews = async () => {
+        const token = getAccessToken();
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+
+        try {
+            const sessionId = await getCurrentSessionId();
+            if (!sessionId) return;
+
+            const response = await api.post(`/simulation/sessions/${sessionId}/next-day`);
+
+            if (isSuccess(response.data)) {
+                // 날짜가 하루 넘어갔으므로 새 날짜의 뉴스 재조회
+                const loaded = await fetchTodayNewsFromSession();
+
+                if (!loaded) {
+                    setNewsData(null);
+                    setAiResult(null);
+                    setUserComment("");
+                    setSelectedSentiment(null);
+                    setError("다음 날짜의 뉴스가 없습니다.");
+                }
+            } else {
+                setError(response.data?.message || "다음 날짜로 이동하지 못했습니다.");
+            }
+        } catch (error) {
+            console.error("next-day 호출 실패:", {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+            } else {
+                setError(error.response?.data?.message || "다음 날짜 이동 중 오류가 발생했습니다.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCompleteLearning = async () => {
+        const token = getAccessToken();
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+
+        try {
+            const sessionId = await getCurrentSessionId();
+            if (!sessionId) return;
+
+            const response = await api.put(`/simulation/sessions/${sessionId}/complete`);
+
+            if (isSuccess(response.data)) {
+                navigate('/main');
+            } else {
+                alert(response.data?.message || "학습 종료 처리에 실패했습니다.");
+            }
+        } catch (error) {
+            console.error("complete 호출 실패:", {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+            } else {
+                alert(error.response?.data?.message || "학습 종료 중 오류가 발생했습니다.");
+            }
+        }
+    };
+
     // 내 정보 수정하기 연동 (PATCH /user/me)
     const handleUpdateInfo = async () => {
         const updatePayload = {
@@ -87,7 +278,7 @@ const News = () => {
         try {
             const response = await api.patch('/user/me', updatePayload);
 
-            if (response.data.status?.toUpperCase() === "SUCCESS") {
+            if (isSuccess(response.data)) {
                 alert("내 정보가 성공적으로 수정되었습니다.");
                 setUserInfo(updatePayload);
 
@@ -111,80 +302,48 @@ const News = () => {
         }
     };
 
-    // 랜덤 뉴스 불러오기 (GET /news/random)
-    const fetchRandomNews = async () => {
-        const token = localStorage.getItem('accessToken');
-
-        if (!token) {
-            navigate('/login');
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-
+    const fetchTodayNewsFromSession = async () => {
         try {
-            console.log("[news/random] 요청 토큰:", token);
-            console.log("[news/random] 요청 URL:", "http://52.78.151.56:8080/news/random");
+            const sessions = await fetchSessions();
+            if (!sessions.length) return false;
 
-            const response = await api.get('/news/random', {
-                headers: {
-                    Accept: '*/*'
+            const sessionId = pickSessionIdToUse(sessions);
+            if (!sessionId) return false;
+
+            const response = await api.get(`/simulation/sessions/${sessionId}/daily-data`);
+
+            if (isSuccess(response.data)) {
+                const todayNews = Array.isArray(response.data?.data?.todayNews)
+                    ? response.data.data.todayNews
+                    : [];
+
+                // 현재 날짜에 표시할 뉴스가 없으면 false 반환
+                if (todayNews.length === 0) {
+                    console.warn("daily-data는 성공했지만 todayNews가 비어 있음");
+                    return false;
                 }
-            });
 
-            console.log("[news/random] 응답:", response.data);
+                // 이번 요구사항에서는 "현재 날짜의 대표 뉴스 1개 표시"만 유지
+                // 따라서 첫 번째 뉴스만 사용
+                const pickedNews = todayNews[0];
 
-            if (String(response.data?.status || "").toUpperCase() === "SUCCESS") {
-                if (response.data?.data) {
-                    setNewsData(response.data.data);
+                if (pickedNews) {
+                    setError(null);
+                    setNewsData(pickedNews);
                     setAiResult(null);
                     setUserComment("");
                     setSelectedSentiment(null);
-                } else {
-                    setNewsData(null);
-                    setAiResult(null);
-                    setUserComment("");
-                    setSelectedSentiment(null);
-                    setError("데이터가 존재하지 않습니다.");
+                    return true;
                 }
-            } else {
-                setNewsData(null);
-                setAiResult(null);
-                setUserComment("");
-                setSelectedSentiment(null);
-                setError(response.data?.message || "뉴스를 불러오지 못했습니다.");
             }
         } catch (error) {
-            const status = error.response?.status;
-
-            console.error("[news/random] 실패 상세:", {
-                status,
+            console.error("daily-data 뉴스 조회 실패:", {
+                status: error.response?.status,
                 data: error.response?.data,
-                headers: error.response?.headers,
                 message: error.message
             });
-
-            if (status === 404) {
-                setNewsData(null);
-                setAiResult(null);
-                setUserComment("");
-                setSelectedSentiment(null);
-                setError(error.response?.data?.message || "뉴스를 찾을 수 없습니다.");
-            } else if (status === 403) {
-                alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
-                localStorage.clear();
-                navigate('/login');
-            } else {
-                setNewsData(null);
-                setAiResult(null);
-                setUserComment("");
-                setSelectedSentiment(null);
-                setError(error.response?.data?.message || "뉴스를 불러오는 중 오류가 발생했습니다.");
-            }
-        } finally {
-            setLoading(false);
         }
+        return false;
     };
 
     // AI 분석 제출 (POST /news/{newsId}/analyze)
@@ -201,7 +360,7 @@ const News = () => {
             return;
         }
 
-        const token = localStorage.getItem('accessToken');
+        const token = getAccessToken();
         if (!token) {
             navigate('/login');
             return;
@@ -225,7 +384,7 @@ const News = () => {
                 }
             );
 
-            if (String(response.data?.status || "").toUpperCase() === "SUCCESS") {
+            if (isSuccess(response.data)) {
                 setAiResult(response.data.data);
             } else {
                 alert(response.data?.message || "분석에 실패했습니다.");
@@ -251,7 +410,7 @@ const News = () => {
     useEffect(() => {
         document.title = "NewsPin - News";
 
-        const token = localStorage.getItem('accessToken');
+        const token = getAccessToken();
         if (!token) {
             navigate('/login');
             return;
@@ -261,7 +420,9 @@ const News = () => {
 
         if (!newsPageInitialized) {
             newsPageInitialized = true;
-            fetchRandomNews();
+
+            // 초기 진입 시 현재 세션의 daily-data 뉴스만 조회
+            loadInitialNews();
         }
     }, []);
 
@@ -409,14 +570,15 @@ const News = () => {
                         </div>
                         <div className="flex gap-20 mt-1 w-[50%] ml-60 items-center justify-center">
                             <button
-                                onClick={fetchRandomNews}
+                                // 버튼 클릭은 다음 뉴스 조회 의도이므로 true 전달
+                                onClick={handleNextNews}
                                 className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-cyan-500"
                             >
                                 <img src={refresh} alt="refresh" className="w-8" />
                                 <span>다음 뉴스</span>
                             </button>
 
-                            <button onClick={() => navigate('/main')} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
+                            <button onClick={handleCompleteLearning} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
                                 <img src={exit} alt="exit" className="w-8" />
                                 <span >학습종료</span>
                             </button>
