@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import input from '../assets/input.png';
 import axios from 'axios';
 
 // 백엔드 서버 주소 설정
@@ -502,7 +503,7 @@ const SignUp = () => {
                                         {...register("authCode", {
                                             required: "인증번호를 입력해주세요."
                                         })}
-                                        className={`w-full px-4 py-2 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('authCode')}`}
+                                        className={`w-full px-4 py-3 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('authCode')}`}
                                     />
                                     {/* 타이머 표시 */}
                                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-red-500 font-bold text-sm">
@@ -513,9 +514,11 @@ const SignUp = () => {
                                 <button
                                     type="button"
                                     onClick={handleVerifyCode}
-                                    className="w-full bg-gray-800 text-white px-4 py-2 cursor-pointer rounded-lg text-sm font-bold hover:bg-gray-700 transition-all"
+                                    disabled={isSubmitting || !emailVerified}
+                                    className="w-full bg-blue-500 border border-white text-sm cursor-pointer text-white font-bold py-3 rounded-lg mt-8 shadow-md hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                 >
-                                    인증번호 확인
+                                    <img src={input} alt="input" className="w-5 h-5" />
+                                    <span>인증번호 확인</span>
                                 </button>
 
                                 {emailVerified && (

@@ -181,6 +181,11 @@ const Portfolio = () => {
         return n.toLocaleString('ko-KR');
     };
 
+    const safeNum = (value, fallback = 0) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : fallback;
+    };
+
     const codeToName = useMemo(() => {
         const map = {};
         Object.values(STOCK_META).forEach(sec => {
@@ -253,31 +258,54 @@ const Portfolio = () => {
 
     const fetchPortfolio = async (sid) => {
         if (!sid) return null;
+
         try {
             const res = await api.get(`/simulation/sessions/${sid}/portfolio`);
+
             if (isSuccess(res.data)) {
+                console.log("portfolio response data:", res.data.data);
                 setPortfolio(res.data.data);
                 return res.data.data;
             }
+
+            console.error("fetchPortfolio fail response:", res.data);
         } catch (e) {
-            console.error("fetchPortfolio error:", e);
+            console.error("fetchPortfolio error detail:", {
+                sid,
+                url: e.config?.url,
+                method: e.config?.method,
+                status: e.response?.status,
+                responseData: e.response?.data,
+            });
         }
+
         setPortfolio(null);
         return null;
     };
 
     const fetchTrades = async (sid) => {
         if (!sid) return [];
+
         try {
             const res = await api.get(`/simulation/sessions/${sid}/trades`);
+
             if (isSuccess(res.data)) {
                 const list = Array.isArray(res.data.data) ? res.data.data : [];
                 setTrades(list);
                 return list;
             }
+
+            console.error("fetchTrades fail response:", res.data);
         } catch (e) {
-            console.error("fetchTrades error:", e);
+            console.error("fetchTrades error detail:", {
+                sid,
+                url: e.config?.url,
+                method: e.config?.method,
+                status: e.response?.status,
+                responseData: e.response?.data,
+            });
         }
+
         setTrades([]);
         return [];
     };
@@ -307,12 +335,19 @@ const Portfolio = () => {
         if (meta) setSession(meta);
         else setSession({ sessionId: sid });
 
-        await Promise.all([
-            fetchSessionDetail(sid),
-            fetchDayData(sid),
-            fetchPortfolio(sid),
-            fetchTrades(sid),
-        ]);
+        const restoreSession = async (sid, listForMeta = null) => {
+            if (!sid) return;
+            localStorage.setItem("simulationSessionId", String(sid));
+
+            const meta = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
+            if (meta) setSession(meta);
+            else setSession({ sessionId: sid });
+
+            await fetchSessionDetail(sid);
+            await fetchDayData(sid);
+            await fetchPortfolio(sid);
+            await fetchTrades(sid);
+        };
     };
 
     // ===== 내 정보 수정 저장(현재 서버 API가 명확하지 않아서 UI만 유지) =====
@@ -341,47 +376,37 @@ const Portfolio = () => {
     };
     // ===== 섹션(보유종목) 데이터 구성: API 응답 형태가 달라도 최대한 맞춰서 표시 =====
     const holdingsMap = useMemo(() => {
-        // 가능한 케이스들을 넓게 수용
-        const rawHoldings =
-            portfolio?.holdings ??
-            portfolio?.positions ??
-            portfolio?.stocks ??
-            portfolio?.items ??
-            [];
+        const rawItems = Array.isArray(portfolio?.items) ? portfolio.items : [];
 
-        const arr = Array.isArray(rawHoldings) ? rawHoldings : [];
-
-        // key: stockCode
         const map = {};
-        arr.forEach((h) => {
-            const code = h?.stockCode ?? h?.code ?? nameToCode[h?.name] ?? null;
+        rawItems.forEach((item) => {
+            const code = item?.stockCode;
             if (!code) return;
 
-            const qty = safeNum(h?.quantity ?? h?.qty ?? h?.count, 0);
-            const cur = safeNum(h?.currentPrice ?? h?.current ?? h?.price ?? h?.marketPrice, 0);
+            const quantity = safeNum(item?.quantity, 0);
+            const averagePrice = safeNum(item?.averagePrice, 0);
+            const currentPrice = safeNum(item?.currentPrice, 0);
 
-            // 수익(실현/평가) 필드가 없으면 0으로
-            const profit =
-                h?.realizedProfit ??
-                h?.realizedPnl ??
-                h?.pnl ??
-                h?.profit ??
-                0;
+            // 현재 응답에 실현손익 필드는 없으므로 보유 평가손익으로 계산
+            const profit = (currentPrice - averagePrice) * quantity;
 
             map[code] = {
-                quantity: qty,
-                currentPrice: cur,
-                profit: safeNum(profit, 0),
+                quantity,
+                currentPrice,
+                profit,
+                stockName: item?.stockName ?? codeToName[code] ?? code,
             };
         });
 
         return map;
-    }, [portfolio, nameToCode]);
+    }, [portfolio, codeToName]);
 
     const sections = useMemo(() => {
         const keys = ["bio", "it", "distribution", "travel", "franchise", "entertainment"];
+
         return keys.map((k) => {
             const sec = STOCK_META[k];
+
             return {
                 title: sec.title,
                 icon: sec.icon,
@@ -395,7 +420,7 @@ const Portfolio = () => {
                         p === 0 ? "0" : (p > 0 ? `+${formatMoney(p)}` : `-${formatMoney(Math.abs(p))}`);
 
                     return {
-                        name: it.name,
+                        name: h?.stockName ?? it.name,
                         count: qty ? `${qty}주` : '-',
                         current: cur ? formatMoney(cur) : '-',
                         profit: profitText,
@@ -407,39 +432,27 @@ const Portfolio = () => {
 
     const tradeRows = useMemo(() => {
         const arr = Array.isArray(trades) ? [...trades] : [];
-        // 최신순 정렬(가능한 필드들)
+
         arr.sort((a, b) => {
-            const at = new Date(a?.tradeDate ?? a?.createdAt ?? a?.date ?? 0).getTime() || 0;
-            const bt = new Date(b?.tradeDate ?? b?.createdAt ?? b?.date ?? 0).getTime() || 0;
+            const at = new Date(a?.tradeDate ?? a?.createdAt ?? 0).getTime() || 0;
+            const bt = new Date(b?.tradeDate ?? b?.createdAt ?? 0).getTime() || 0;
             return bt - at;
         });
+
         return arr.slice(0, 30).map((t) => {
-            const code = t?.stockCode ?? t?.code ?? null;
-            const name = t?.stockName ?? t?.name ?? (code ? (codeToName[code] ?? code) : '-');
+            const code = t?.stockCode ?? null;
+            const name = t?.stockName ?? (code ? (codeToName[code] ?? code) : '-');
 
-            const qty = safeNum(t?.quantity ?? t?.qty, 0);
-            const price = safeNum(t?.price ?? t?.tradePrice ?? t?.amount, 0);
-
-            // 수익 필드가 없으면 '-' 처리
-            const profitVal =
-                t?.profit ??
-                t?.realizedProfit ??
-                t?.realizedPnl ??
-                t?.pnl;
-
-            const profitText =
-                typeof profitVal === "number"
-                    ? (profitVal >= 0 ? `+${formatMoney(profitVal)}` : `-${formatMoney(Math.abs(profitVal))}`)
-                    : (profitVal != null ? String(profitVal) : '-');
-
-            const dateStr = (t?.tradeDate ?? t?.createdAt ?? t?.date ?? '').toString().slice(0, 10) || '-';
+            const qty = safeNum(t?.quantity, 0);
+            const totalAmount = safeNum(t?.totalAmount, 0);
+            const dateStr = (t?.tradeDate ?? t?.createdAt ?? '').toString().slice(0, 10) || '-';
 
             return {
                 name,
-                amount: price ? formatMoney(price) : '-',
+                amount: totalAmount ? formatMoney(totalAmount) : '-',
                 qty: qty || '-',
-                profitText,
-                profitUp: typeof profitVal === "number" ? profitVal >= 0 : String(profitText).includes('+'),
+                profitText: '-',   // 현재 거래 조회 응답에는 수익 필드 없음
+                profitUp: false,
                 dateStr,
             };
         });
