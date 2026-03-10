@@ -97,8 +97,9 @@ const Trade = () => {
     const [sessions, setSessions] = useState([]); // 내 시뮬레이션 세션 목록
     const [session, setSession] = useState(null); // 현재 사용 중인 세션
     const [dayData, setDayData] = useState(null); // 현재 날짜의 뉴스 및 자산 정보
-    const [portfolio, setPortfolio] = useState(null); // setPortfolio 상태 추가
-    const [selectedCategory, setSelectedCategory] = useState("bio"); // ✅ 선택 카테고리(현재 활성 카테고리) 상태 추가
+    const [portfolio, setPortfolio] = useState(null); // 포트폴리오 응답
+    const [report, setReport] = useState(null); // ✅ 투자 결과 및 피드백(report API 응답) 상태 추가
+    const [selectedCategory, setSelectedCategory] = useState("bio"); // 현재 선택 카테고리
 
     const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
     const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
@@ -232,6 +233,7 @@ const Trade = () => {
             }
 
             setSession(sessionData);
+            setReport(null); // ✅ 새 세션 시작 시 이전 리포트 제거
             localStorage.setItem("simulationSessionId", String(sid));
 
             await Promise.all([
@@ -250,14 +252,26 @@ const Trade = () => {
 
     // 리포트 조회 (GET /simulation/sessions/{sessionId}/report)
     const fetchReport = async (sid) => {
-        if (!sid) return null;
+        if (!sid) {
+            setReport(null);
+            return null;
+        }
+
         try {
             const res = await api.get(`/simulation/sessions/${sid}/report`);
             console.log("report:", res.data);
-            if (isSuccess(res.data)) return res.data.data;
+
+            if (isSuccess(res.data)) {
+                setReport(res.data.data); // ✅ UI에서 바로 쓸 수 있게 상태 반영
+                return res.data.data;
+            } else {
+                setReport(null);
+            }
         } catch (e) {
             console.error("fetchReport error:", e);
+            setReport(null);
         }
+
         return null;
     };
 
@@ -329,8 +343,12 @@ const Trade = () => {
                 return;
             }
 
-            // 완료 처리 후 최신 상태 반영
-            await fetchSessionDetail(sid);
+            // ✅ 완료 처리 후 세션 상태를 최신화
+            const latestSession = await fetchSessionDetail(sid);
+
+            // ✅ 완료된 세션의 최종 투자 결과/피드백 조회
+            await fetchReport(sid);
+
             await fetchSessions();
             alert("세션이 완료 처리되었습니다.");
         } catch (e) {
@@ -363,24 +381,30 @@ const Trade = () => {
     const restoreSession = async (sid, listForMeta = null) => {
         if (!sid) return;
 
-        // 목록에서 현재 sid에 해당하는 최신 세션 정보(날짜 등)를 찾아 상태 업데이트
         const currentSessionInfo = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
 
         if (currentSessionInfo) {
             setSession(currentSessionInfo);
         } else {
-            // 목록에 없을 경우 최소한의 ID 정보라도 유지
             setSession({ sessionId: sid });
         }
 
         localStorage.setItem("simulationSessionId", String(sid));
 
-        // 해당 세션의 상세 데이터(포트폴리오, 거래내역, 일일데이터) 호출
+        // ✅ 기본 데이터 복구
         await Promise.all([
             fetchDayData(sid),
             fetchPortfolio(sid),
             fetchTrades(sid)
         ]);
+
+        // ✅ 세션이 완료 상태이면 report도 함께 조회
+        const currentStatus = String(currentSessionInfo?.status || "").toUpperCase();
+        if (currentStatus === "COMPLETED") {
+            await fetchReport(sid);
+        } else {
+            setReport(null);
+        }
     };
 
     const fetchUserInfo = async () => {
@@ -459,6 +483,7 @@ const Trade = () => {
             setSession(null);
             setDayData(null);
             setPortfolio(null);
+            setReport(null); // ✅ 삭제된 세션 report 제거
             setTrades([]);
 
             // 목록 갱신 후 다른 세션 자동 복구(있다면)
@@ -942,13 +967,47 @@ const Trade = () => {
                         {/* 4. 투자 결과 및 피드백 -> 추후 api 연동 */}
                         <div className="h-48 border-2 border-gray-400 rounded-lg p-3 bg-white flex flex-col overflow-hidden">
                             <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                                <img src={review} className="w-6" /> 투자 가이드
+                                <img src={review} className="w-6" alt="review" /> 투자 결과 및 피드백
                             </h3>
+
                             <div className="flex-1 overflow-y-auto text-xs font-jua bg-yellow-50 p-2 rounded">
-                                {dayData ? (
-                                    <p>💡 <b>{dayData.simulationDate}</b> 기준 분석: 뉴스 감성이 <b>{dayData.todayNews?.[0]?.sentiment || '중립'}</b>적입니다. 시장 상황을 고려하여 {dayData.profitRate < 0 ? '추가 매수' : '익절'}를 검토해보세요.</p>
+                                {report ? (
+                                    <div className="space-y-2">
+                                        {/* ✅ Swagger의 InvestmentReportResponse 필드 사용 */}
+                                        <p>
+                                            📈 총 수익률:
+                                            <b className={report.totalProfitRate >= 0 ? 'text-red-500 ml-1' : 'text-blue-500 ml-1'}>
+                                                {report.totalProfitRate}%
+                                            </b>
+                                        </p>
+
+                                        <p>
+                                            💰 최종 자산:
+                                            <b className="ml-1">{report.finalAsset?.toLocaleString()}원</b>
+                                        </p>
+
+                                        <p>
+                                            🔁 총 거래 횟수:
+                                            <b className="ml-1">{report.totalTradeCount}회</b>
+                                            <span className="ml-2">매수 {report.buyCount} / 매도 {report.sellCount}</span>
+                                        </p>
+
+                                        <p>🧠 종합 분석: {report.overallAnalysis}</p>
+                                        <p>📰 뉴스 반응 분석: {report.newsResponseAnalysis}</p>
+                                        <p>⚠️ 리스크 관리 분석: {report.riskManagementAnalysis}</p>
+                                        <p>✅ 개선 제안: {report.improvementSuggestions}</p>
+                                    </div>
+                                ) : session?.status?.toUpperCase() === "COMPLETED" ? (
+                                    <p>세션은 완료되었지만 투자 결과 및 피드백을 불러오지 못했습니다.</p>
+                                ) : dayData ? (
+                                    // ✅ 세션 완료 전에는 기존 dayData 기반 가이드 유지
+                                    <p>
+                                        💡 <b>{dayData.simulationDate}</b> 기준 분석:
+                                        뉴스 감성이 <b>{dayData.todayNews?.[0]?.sentiment || '중립'}</b>적입니다.
+                                        시장 상황을 고려하여 {dayData.profitRate < 0 ? '추가 매수' : '익절'}를 검토해보세요.
+                                    </p>
                                 ) : (
-                                    <p>투자를 시작하면 AI 분석 가이드가 제공됩니다.</p>
+                                    <p>투자를 시작하면 투자 결과 및 피드백이 제공됩니다.</p>
                                 )}
                             </div>
                         </div>
@@ -978,7 +1037,15 @@ const Trade = () => {
                     </div>
 
                     <div className="flex gap-3">
-                        <button onClick={() => navigate(`/report/${session?.sessionId}`)} className="bg-slate-700 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-gray-400 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md">
+                        <button
+                            onClick={() => {
+                                if (!session?.sessionId) {
+                                    alert("조회할 세션이 없습니다.");
+                                    return;
+                                }
+                            }}
+                            className="bg-slate-700 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-gray-400 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md"
+                        >
                             <span className="text-lg">📊</span> 투자 결과 및 피드백
                         </button>
                         <button onClick={() => navigate('/portfolio')} className="bg-blue-600 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-blue-600 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md hover:bg-blue-800">
