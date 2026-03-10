@@ -82,6 +82,7 @@ const News = () => {
     const [selectedSentiment, setSelectedSentiment] = useState(null);
     const [aiResult, setAiResult] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [submittingOpinion, setSubmittingOpinion] = useState(false);
     const [error, setError] = useState(null);
     const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
     const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
@@ -182,6 +183,18 @@ const News = () => {
         });
 
         return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
+    };
+
+    const handleLogout = async () => {
+        try {
+            await api.post('/user/logout');
+        } catch (e) {
+            console.error("로그아웃 API 호출 실패", e);
+        } finally {
+            newsPageInitialized = false;
+            localStorage.clear();
+            navigate('/login');
+        }
     };
 
     const handleNextNews = async () => {
@@ -346,64 +359,88 @@ const News = () => {
         return false;
     };
 
+    // 1) newsData가 없을 때 조용히 return하지 말고 사용자에게 알려줘야 함
+    // 2) 제출 중 상태를 따로 둬서 중복 클릭을 막아야 함
+    // 3) 401/403이면 다른 API들과 동일하게 로그인 만료 처리 맞춰야 함
+    // 4) 실패 로그에 newsId, status, data를 같이 찍어야 실제 디버깅 가능
     // AI 분석 제출 (POST /news/{newsId}/analyze)
     const handleSubmitOpinion = async () => {
-        if (!newsData?.newsId) return;
-
+        // 현재 표시 중인 뉴스가 없으면 제출 불가
+        if (!newsData?.newsId) {
+            alert("현재 분석할 뉴스가 없습니다.");
+            return;
+        }
+        // 사용자가 호재(POSITIVE) 또는 악재(NEGATIVE)를 선택했는지 확인
         if (!selectedSentiment) {
             alert("호재 또는 악재를 먼저 선택해주세요.");
             return;
         }
-
+        // 판단 근거 코멘트를 입력했는지 확인
         if (!userComment.trim()) {
             alert("판단 근거를 입력해주세요.");
             return;
         }
+        // 로그인 토큰 확인 (없으면 로그인 페이지 이동)
 
         const token = getAccessToken();
         if (!token) {
             navigate('/login');
             return;
         }
-
+        // 서버로 보낼 요청 데이터 생성
+        // sentiment : 사용자가 선택한 호재/악재
+        // reason : 사용자가 작성한 판단 근거
         const requestData = {
             sentiment: selectedSentiment,
             reason: userComment.trim()
         };
 
         try {
+            // 의견 제출 진행 상태로 변경 (버튼 중복 클릭 방지)
+            setSubmittingOpinion(true);
+
+            // 뉴스 분석 API 호출
+            // POST /news/{newsId}/analyze
             const response = await api.post(
                 `/news/${newsData.newsId}/analyze`,
                 requestData,
                 {
                     headers: {
-                        Authorization: `Bearer ${token}`,
+                        Authorization: `Bearer ${token}`, // 인증 토큰
                         Accept: '*/*',
                         'Content-Type': 'application/json'
                     }
                 }
             );
+            // 서버 응답이 성공이면 AI 분석 결과 화면에 표시
 
             if (isSuccess(response.data)) {
+                // AI 분석 결과 화면 반영
                 setAiResult(response.data.data);
             } else {
                 alert(response.data?.message || "분석에 실패했습니다.");
             }
         } catch (error) {
-            console.error("분석 실패:", error);
-            alert(error.response?.data?.message || "분석 중 오류가 발생했습니다.");
-        }
-    };
+            // API 호출 실패 시 오류 정보 출력
 
-    const handleLogout = async () => {
-        try {
-            await api.post('/user/logout');
-        } catch (e) {
-            console.error("로그아웃 API 호출 실패", e);
+            console.error("분석 실패:", {
+                newsId: newsData?.newsId,
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
+            // 인증 오류 발생 시 로그인 페이지 이동
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+            } else {
+                alert(error.response?.data?.message || "분석 중 오류가 발생했습니다.");
+            }
         } finally {
-            newsPageInitialized = false;
-            localStorage.clear();
-            navigate('/login');
+            // 제출 완료 후 제출 상태 해제
+            setSubmittingOpinion(false);
         }
     };
 
@@ -516,10 +553,17 @@ const News = () => {
                         <div>
                             <button
                                 onClick={handleSubmitOpinion}
-                                className="w-full active:scale-[0.98] transition-all rounded-lg bg-blue-600 text-white p-1 font-bold flex items-center justify-center shadow-md cursor-pointer hover:bg-cyan-400 shrink-0 font-jua"
+                                disabled={submittingOpinion || !newsData?.newsId}
+                                className={`w-full active:scale-[0.98] transition-all rounded-lg text-white p-1 font-bold flex items-center justify-center shadow-md shrink-0 font-jua
+                                    ${submittingOpinion || !newsData?.newsId
+                                        ? 'bg-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 cursor-pointer hover:bg-cyan-400'
+                                    }`}
                             >
                                 <img src={submit} alt="submit" className="w-6 mr-2" />
-                                <p className='font-semibold'>의견 제출</p>
+                                <p className='font-semibold'>
+                                    {submittingOpinion ? '제출 중...' : '의견 제출'}
+                                </p>
                             </button>
                         </div>
                     </div>
