@@ -54,21 +54,11 @@ const Password = () => {
   };
 
   const resetPassword = (email, code, newPassword) => {
-    return axios.post(
-      `${API_BASE_URL}/user/password/reset`,
-      {
-        email: (email || "").trim().toLowerCase(),
-        code: String(code || "").trim().toUpperCase(),
-        newPassword: String(newPassword || "")
-      },
-      {
-        withCredentials: false,
-        headers: {
-          Accept: '*/*',
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    return publicApi.post('/user/password/reset', {
+      email: String(email || "").trim().toLowerCase(),
+      code: String(code || "").trim(),
+      newPassword: String(newPassword || "").trim()
+    });
   };
 
   /// 비밀번호 재설정 통합 제출 핸들러
@@ -108,9 +98,13 @@ const Password = () => {
         }
       }
     } catch (error) {
-      const errorData = error.response?.data;
-      console.error("Error Detail:", errorData);
+      console.error("Error Detail:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
 
+      const errorData = error.response?.data;
       const serverMessage =
         errorData?.message ||
         errorData?.error ||
