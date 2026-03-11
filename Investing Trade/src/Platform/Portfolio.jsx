@@ -37,7 +37,7 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// ✅ 서버 응답이 { status: "success", code: "200" } 형태인 것 같아서 그 기준으로 처리
+//  서버 응답이 { status: "success", code: "200" } 형태인 것 같아서 그 기준으로 처리
 const isSuccess = (data) => {
     if (!data) return false;
 

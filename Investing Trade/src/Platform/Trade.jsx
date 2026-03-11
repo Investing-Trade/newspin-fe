@@ -69,7 +69,7 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// ✅ 403/401이면 토큰 제거 후 로그인으로 보내기(세션 API 포함 전부에 적용)
+//  403/401이면 토큰 제거 후 로그인으로 보내기(세션 API 포함 전부에 적용)
 api.interceptors.response.use(
     (res) => res,
     (error) => {
@@ -98,9 +98,10 @@ const Trade = () => {
     const [session, setSession] = useState(null); // 현재 사용 중인 세션
     const [dayData, setDayData] = useState(null); // 현재 날짜의 뉴스 및 자산 정보
     const [portfolio, setPortfolio] = useState(null); // 포트폴리오 응답
-    const [report, setReport] = useState(null); // ✅ 투자 결과 및 피드백(report API 응답) 상태 추가
+    const [report, setReport] = useState(null); //  투자 결과 및 피드백(report API 응답) 상태 추가
     const [selectedCategory, setSelectedCategory] = useState("bio"); // 현재 선택 카테고리
-
+    const [currentFeedback, setCurrentFeedback] = useState(null); // 진행 중 세션에서 버튼 클릭 시 생성되는 현재 시점 피드백 상태
+    const [hasRequestedFeedback, setHasRequestedFeedback] = useState(false); // 사용자가 "투자 결과 및 피드백" 버튼을 눌렀는지 여부, 이 값을 분리해서 초기 렌더링 시 자동 분석 문구가 뜨지 않게 막음
     const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
     const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
 
@@ -112,13 +113,13 @@ const Trade = () => {
         endDate: '2020-03-31'
     });
 
-    // ✅ 종목 및 수량 관리 상태 수정
+    //  종목 및 수량 관리 상태 수정
     const [tradeOrder, setTradeOrder] = useState({
         stockCode: 'CELLTRION',
         quantity: 1,
     });
 
-    // ✅ 1) STOCKS를 카테고리별로 분리 (기존 STOCKS 교체)
+    //  1) STOCKS를 카테고리별로 분리 (기존 STOCKS 교체)
     const STOCK_CATEGORIES = {
         bio: [
             { label: "셀트리온", code: "CELLTRION", price: 58000 },
@@ -158,7 +159,7 @@ const Trade = () => {
         ],
     };
 
-    // 세션 삭제 시: 기록까지 전부 제거
+    // 세션 삭제 시 모든 진행/결과 데이터를 완전히 초기화
     const clearAllSessionState = () => {
         localStorage.removeItem("simulationSessionId");
         setSession(null);
@@ -166,16 +167,25 @@ const Trade = () => {
         setPortfolio(null);
         setTrades([]);
         setReport(null);
+
+        // 진행 중 피드백 상태도 함께 초기화
+        setCurrentFeedback(null);
+        setHasRequestedFeedback(false);
     };
 
-    // 세션 종료 시: 진행 정보만 제거하고 완료 정보(report, completed session)는 유지
+    // 진행 중 세션 정보만 비우고 완료 리포트 등은 유지할 때 사용
     const clearActiveProgressOnly = () => {
         localStorage.removeItem("simulationSessionId");
         setDayData(null);
         setPortfolio(null);
         setTrades([]);
+
+        // 진행 중 피드백 상태 초기화
+        setCurrentFeedback(null);
+        setHasRequestedFeedback(false);
     };
 
+    // 현재 세션 관련 상태를 전체 초기화
     const clearCurrentProgress = () => {
         localStorage.removeItem("simulationSessionId");
         setSession(null);
@@ -183,11 +193,15 @@ const Trade = () => {
         setPortfolio(null);
         setTrades([]);
         setReport(null);
+
+        // 진행 중 피드백 상태 초기화
+        setCurrentFeedback(null);
+        setHasRequestedFeedback(false);
     };
 
     const currentStocks = STOCK_CATEGORIES[selectedCategory] ?? [];
 
-    // ✅ 카테고리 바뀌었는데 현재 stockCode가 그 카테고리에 없으면 첫 종목으로 맞춤
+    //  카테고리 바뀌었는데 현재 stockCode가 그 카테고리에 없으면 첫 종목으로 맞춤
     useEffect(() => {
         if (!currentStocks.length) return;
 
@@ -205,7 +219,7 @@ const Trade = () => {
     const selectedPrice = selectedStock?.price ?? 0;
     const totalPrice = (Number(tradeOrder.quantity) || 0) * (Number(selectedPrice) || 0);
 
-    // ✅ 4) 카테고리 클릭 핸들러 추가 (아무 함수들 있는 곳에 추가)
+    //  4) 카테고리 클릭 핸들러 추가 (아무 함수들 있는 곳에 추가)
     const handlePickCategory = (catKey) => {
         if (!session?.sessionId) return alert("먼저 투자를 시작해주세요.");
 
@@ -214,7 +228,7 @@ const Trade = () => {
 
         setSelectedCategory(catKey);
 
-        // ✅ 카테고리 바꾸면 첫 종목으로 자동 선택 + 수량 유지
+        //  카테고리 바꾸면 첫 종목으로 자동 선택 + 수량 유지
         setTradeOrder((prev) => ({
             ...prev,
             stockCode: list[0].code,
@@ -259,8 +273,17 @@ const Trade = () => {
                 return;
             }
 
+            // 새 세션 시작 시 현재 세션 정보 반영
             setSession(sessionData);
-            setReport(null); // ✅ 새 세션 시작 시 이전 리포트 제거
+
+            // 이전 완료 리포트 제거
+            setReport(null);
+
+            // 이전 진행 피드백도 제거해서 초기 문구가 나오도록 설정
+            setCurrentFeedback(null);
+            setHasRequestedFeedback(false);
+
+            // 현재 진행 중 세션 ID 저장
             localStorage.setItem("simulationSessionId", String(sid));
 
             await Promise.all([
@@ -289,7 +312,7 @@ const Trade = () => {
             console.log("report:", res.data);
 
             if (isSuccess(res.data)) {
-                setReport(res.data.data); // ✅ UI에서 바로 쓸 수 있게 상태 반영
+                setReport(res.data.data); //  UI에서 바로 쓸 수 있게 상태 반영
                 return res.data.data;
             } else {
                 setReport(null);
@@ -384,6 +407,10 @@ const Trade = () => {
             setPortfolio(null);
             setTrades([]);
 
+            // 진행 중 피드백 상태 초기화
+            setCurrentFeedback(null);
+            setHasRequestedFeedback(false);
+
             //  세션 목록 갱신
             await fetchSessions();
 
@@ -435,20 +462,24 @@ const Trade = () => {
 
         localStorage.setItem("simulationSessionId", String(sid));
 
-        // ✅ 기본 데이터 복구
+        // 기본 데이터 복구
         await Promise.all([
             fetchDayData(sid),
             fetchPortfolio(sid),
             fetchTrades(sid)
         ]);
 
-        // ✅ 세션이 완료 상태이면 report도 함께 조회
+        // 세션이 완료 상태이면 report도 함께 조회
         const currentStatus = String(currentSessionInfo?.status || "").toUpperCase();
         if (currentStatus === "COMPLETED") {
             await fetchReport(sid);
         } else {
             setReport(null);
         }
+
+        // 페이지 복구 시 자동 분석이 뜨지 않도록 초기화
+        setCurrentFeedback(null);
+        setHasRequestedFeedback(false);
     };
 
     const fetchUserInfo = async () => {
@@ -558,6 +589,138 @@ const Trade = () => {
         }
     };
 
+    // ✅ 현재 진행 중인 날짜 기준으로 투자 평가/피드백 문구를 생성하는 함수
+    // dayData + trades + portfolio 데이터를 조합해서 화면에 보여줄 피드백 객체를 만듦
+    const buildCurrentFeedback = (day, tradeList, portfolioData) => {
+        // ✅ 진행 데이터가 없으면 기본 문구 반환
+        if (!day) {
+            return {
+                simulationDate: "-",
+                totalTradeCount: 0,
+                buyCount: 0,
+                sellCount: 0,
+                totalAsset: 0,
+                currentCapital: 0,
+                profitRate: 0,
+                sentiment: "NEUTRAL",
+                summary: "현재 진행 데이터가 없어 투자 결과 및 피드백을 생성할 수 없습니다.",
+            };
+        }
+
+        // 현재 시뮬레이션 날짜
+        const currentDate = String(day.simulationDate);
+
+        // 현재 날짜 기준 매수/매도 내역만 필터링
+        const todayTrades = Array.isArray(tradeList)
+            ? tradeList.filter((trade) => String(trade.tradeDate) === currentDate)
+            : [];
+
+        // 현재 날짜 기준 매수/매도 횟수 계산
+        const buyCount = todayTrades.filter(
+            (trade) => String(trade.tradeType).toUpperCase() === "BUY"
+        ).length;
+
+        const sellCount = todayTrades.filter(
+            (trade) => String(trade.tradeType).toUpperCase() === "SELL"
+        ).length;
+
+        // 현재 날짜 기준 주요 수치
+        const sentiment = day.todayNews?.[0]?.sentiment || "NEUTRAL";
+        const profitRate = Number(day.profitRate || 0);
+        const totalAsset = Number(day.totalAsset || 0);
+        const currentCapital = Number(portfolioData?.currentCapital || 0);
+
+        // 뉴스 감성과 수익률을 바탕으로 현재 시점 평가 문구 생성
+        let summary = `${currentDate} 기준 `;
+        summary += `총 ${todayTrades.length}건의 거래가 있었습니다. `;
+        summary += `(매수 ${buyCount}건 / 매도 ${sellCount}건) `;
+
+        if (profitRate > 0) {
+            summary += `현재 수익률은 ${profitRate}%로 양호한 흐름입니다. `;
+        } else if (profitRate < 0) {
+            summary += `현재 수익률은 ${profitRate}%로 손실 구간입니다. `;
+        } else {
+            summary += `현재 수익률은 0% 수준입니다. `;
+        }
+
+        if (sentiment === "POSITIVE") {
+            summary += "뉴스 감성이 긍정적이므로 보유 종목 흐름을 점검하며 수익 실현 또는 추가 전략을 검토해보세요.";
+        } else if (sentiment === "NEGATIVE") {
+            summary += "뉴스 감성이 부정적이므로 무리한 추가 매수보다 리스크 관리와 보수적 대응을 우선 검토해보세요.";
+        } else {
+            summary += "뉴스 감성이 중립적이므로 성급한 추격 매수·매도보다 현재 포지션 점검을 우선해보세요.";
+        }
+
+        // 화면에서 바로 쓸 수 있게 결과 객체 반환
+        return {
+            simulationDate: currentDate,
+            totalTradeCount: todayTrades.length,
+            buyCount,
+            sellCount,
+            totalAsset,
+            currentCapital,
+            profitRate,
+            sentiment,
+            summary,
+        };
+    };
+
+    // "투자 결과 및 피드백" 버튼 클릭 시 실행되는 함수
+    // - 세션이 COMPLETED면 report API 결과를 보여줌
+    // - 세션이 ACTIVE면 현재 날짜 기준 daily-data / trades / portfolio를 조회해서 피드백 생성
+    const handleFetchCurrentFeedback = async () => {
+        const sid = session?.sessionId;
+
+        // 세션이 없으면 조회 불가
+        if (!sid) {
+            alert("조회할 세션이 없습니다.");
+            return;
+        }
+
+        try {
+            // 완료된 세션은 기존 최종 report를 그대로 사용
+            if (String(session?.status).toUpperCase() === "COMPLETED") {
+                await fetchReport(sid);
+                setCurrentFeedback(null);
+                setHasRequestedFeedback(true);
+                return;
+            }
+
+            // 진행 중 세션은 현재 날짜 기준 데이터 재조회
+            const [dayRes, tradeRes, portfolioRes] = await Promise.all([
+                api.get(`/simulation/sessions/${sid}/daily-data`),
+                api.get(`/simulation/sessions/${sid}/trades`),
+                api.get(`/simulation/sessions/${sid}/portfolio`)
+            ]);
+
+            // 응답 데이터 검증 후 상태 반영
+            const latestDayData = isSuccess(dayRes.data) ? dayRes.data.data : null;
+            const latestTrades = isSuccess(tradeRes.data) && Array.isArray(tradeRes.data.data)
+                ? tradeRes.data.data
+                : [];
+            const latestPortfolio = isSuccess(portfolioRes.data) ? portfolioRes.data.data : null;
+
+            setDayData(latestDayData);
+            setTrades(latestTrades);
+            setPortfolio(latestPortfolio);
+
+            // 현재 진행 기준 피드백 생성
+            const feedback = buildCurrentFeedback(latestDayData, latestTrades, latestPortfolio);
+
+            // 진행 중 피드백 상태 저장
+            setCurrentFeedback(feedback);
+
+            // 진행 중 조회에서는 최종 report를 비움
+            setReport(null);
+
+            // 사용자가 버튼을 눌렀다는 상태 저장
+            setHasRequestedFeedback(true);
+        } catch (error) {
+            console.error("투자 결과 및 피드백 조회 실패:", error);
+            alert("투자 결과 및 피드백을 불러오지 못했습니다.");
+        }
+    };
+
     // 매수/매도 실행 (POST /simulation/sessions/{sessionId}/trades)
     const handleTrade = async (type) => {
         if (!session?.sessionId) return alert("투자가 진행 중이 아닙니다.");
@@ -570,7 +733,7 @@ const Trade = () => {
                 stockCode: tradeOrder.stockCode,
                 tradeType: type,
                 quantity: qty,
-                price: selectedPrice, // ✅ 선택 종목 가격
+                price: selectedPrice, //  선택 종목 가격
             });
 
             if (isSuccess(response.data)) {
@@ -1008,8 +1171,8 @@ const Trade = () => {
 
                             <div className="flex-1 overflow-y-auto text-xs font-jua bg-yellow-50 p-2 rounded">
                                 {report ? (
+                                    // 완료된 세션이면 report API 기반 최종 보고서 표시
                                     <div className="space-y-2">
-                                        {/* ✅ Swagger의 InvestmentReportResponse 필드 사용 */}
                                         <p>
                                             📈 총 수익률:
                                             <b className={report.totalProfitRate >= 0 ? 'text-red-500 ml-1' : 'text-blue-500 ml-1'}>
@@ -1033,16 +1196,49 @@ const Trade = () => {
                                         <p>⚠️ 리스크 관리 분석: {report.riskManagementAnalysis}</p>
                                         <p>✅ 개선 제안: {report.improvementSuggestions}</p>
                                     </div>
+                                ) : hasRequestedFeedback && currentFeedback ? (
+                                    // 진행 중 세션에서 버튼 클릭 후 생성된 현재 날짜 기준 보고서 표시
+                                    <div className="space-y-2">
+                                        <p>
+                                            📅 기준 날짜:
+                                            <b className="ml-1">{currentFeedback.simulationDate}</b>
+                                        </p>
+
+                                        <p>
+                                            📈 현재 수익률:
+                                            <b className={currentFeedback.profitRate >= 0 ? 'text-red-500 ml-1' : 'text-blue-500 ml-1'}>
+                                                {currentFeedback.profitRate}%
+                                            </b>
+                                        </p>
+
+                                        <p>
+                                            💰 현재 총 자산:
+                                            <b className="ml-1">{currentFeedback.totalAsset?.toLocaleString()}원</b>
+                                        </p>
+
+                                        <p>
+                                            💵 현재 가용 잔액:
+                                            <b className="ml-1">{currentFeedback.currentCapital?.toLocaleString()}원</b>
+                                        </p>
+
+                                        <p>
+                                            🔁 현재 날짜 거래 횟수:
+                                            <b className="ml-1">{currentFeedback.totalTradeCount}회</b>
+                                            <span className="ml-2">매수 {currentFeedback.buyCount} / 매도 {currentFeedback.sellCount}</span>
+                                        </p>
+
+                                        <p>
+                                            📰 뉴스 감성:
+                                            <b className="ml-1">{currentFeedback.sentiment}</b>
+                                        </p>
+
+                                        <p>💡 평가 및 피드백: {currentFeedback.summary}</p>
+                                    </div>
                                 ) : session?.status?.toUpperCase() === "COMPLETED" ? (
+                                    // 완료 세션인데 report를 불러오지 못한 경우
                                     <p>세션은 완료되었지만 투자 결과 및 피드백을 불러오지 못했습니다.</p>
-                                ) : dayData ? (
-                                    // ✅ 세션 완료 전에는 기존 dayData 기반 가이드 유지
-                                    <p>
-                                        💡 <b>{dayData.simulationDate}</b> 기준 분석:
-                                        뉴스 감성이 <b>{dayData.todayNews?.[0]?.sentiment || '중립'}</b>적입니다.
-                                        시장 상황을 고려하여 {dayData.profitRate < 0 ? '추가 매수' : '익절'}를 검토해보세요.
-                                    </p>
                                 ) : (
+                                    // 초기 진입 시 또는 버튼 클릭 전에는 항상 기본 안내 문구만 표시
                                     <p>투자를 시작하면 투자 결과 및 피드백이 제공됩니다.</p>
                                 )}
                             </div>
@@ -1074,12 +1270,7 @@ const Trade = () => {
 
                     <div className="flex gap-3">
                         <button
-                            onClick={() => {
-                                if (!session?.sessionId) {
-                                    alert("조회할 세션이 없습니다.");
-                                    return;
-                                }
-                            }}
+                            onClick={handleFetchCurrentFeedback}
                             className="bg-slate-700 text-white px-4 py-2 rounded-xl cursor-pointer hover:bg-gray-400 active:scale-[0.90] text-xs font-bold flex items-center gap-2 shadow-md"
                         >
                             <span className="text-lg">📊</span> 투자 결과 및 피드백
