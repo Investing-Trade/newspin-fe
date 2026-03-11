@@ -343,14 +343,10 @@ const Trade = () => {
                 return;
             }
 
-            // ✅ 완료 처리 후 세션 상태를 최신화
-            const latestSession = await fetchSessionDetail(sid);
-
-            // ✅ 완료된 세션의 최종 투자 결과/피드백 조회
-            await fetchReport(sid);
-
+            clearCurrentProgress();
             await fetchSessions();
-            alert("세션이 완료 처리되었습니다.");
+
+            alert("세션이 종료되어 현재 투자 진행 정보가 초기화되었습니다.");
         } catch (e) {
             console.error("complete error:", e);
             alert("세션 완료 처리 중 오류가 발생했습니다.");
@@ -478,20 +474,10 @@ const Trade = () => {
                 return;
             }
 
-            // 로컬/상태 초기화
-            localStorage.removeItem("simulationSessionId");
-            setSession(null);
-            setDayData(null);
-            setPortfolio(null);
-            setReport(null); // ✅ 삭제된 세션 report 제거
-            setTrades([]);
+            clearCurrentProgress();
+            await fetchSessions();
 
-            // 목록 갱신 후 다른 세션 자동 복구(있다면)
-            const list = await fetchSessions();
-            const nextSid = pickSessionIdToRestore(list);
-            if (nextSid) await restoreSession(nextSid, list);
-
-            alert("세션이 삭제되었습니다.");
+            alert("세션이 삭제되어 현재 투자 진행 정보도 함께 제거되었습니다.");
         } catch (e) {
             console.error("delete error:", e);
             alert("세션 삭제 중 오류가 발생했습니다.");

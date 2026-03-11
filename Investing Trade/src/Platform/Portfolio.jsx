@@ -93,7 +93,6 @@ const Portfolio = () => {
     const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
 
     // ===== 시뮬레이션/포트폴리오/거래내역 상태 =====
-    const [sessions, setSessions] = useState([]);
     const [session, setSession] = useState(null);        // 세션 상세/메타
     const [portfolio, setPortfolio] = useState(null);    // 잔고 + 보유종목(가능하면)
     const [dayData, setDayData] = useState(null);        // 현재 날짜(가능하면)
@@ -194,20 +193,19 @@ const Portfolio = () => {
         return map;
     }, [STOCK_META]);
 
-    const nameToCode = useMemo(() => {
-        const map = {};
-        Object.values(STOCK_META).forEach(sec => {
-            sec.items.forEach(i => { map[i.name] = i.code; });
-        });
-        return map;
-    }, [STOCK_META]);
-
     // ===== API 함수들 =====
     const fetchUserInfo = async () => {
         try {
             const res = await api.get('/user/me');
             if (isSuccess(res.data)) {
-                setUserInfo(res.data.data ?? { userId: '', email: '', password: '****' });
+                const savedPwd = localStorage.getItem("userPwd") || "****";
+                const info = {
+                    ...(res.data.data ?? { userId: '', email: '' }),
+                    password: savedPwd,
+                };
+
+                setUserInfo(info);
+                setEditData(info);
             }
         } catch (e) {
             console.error("fetchUserInfo error:", e);
@@ -283,6 +281,20 @@ const Portfolio = () => {
         return null;
     };
 
+    const handleLogout = () => {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("simulationSessionId");
+        navigate('/login');
+    };
+
+    const clearCurrentProgress = () => {
+        localStorage.removeItem("simulationSessionId");
+        setSession(null);
+        setDayData(null);
+        setPortfolio(null);
+        setTrades([]);
+    };
+
     const fetchTrades = async (sid) => {
         if (!sid) return [];
 
@@ -311,43 +323,40 @@ const Portfolio = () => {
     };
 
     const pickSessionIdToRestore = (list) => {
+        const activeList = Array.isArray(list)
+            ? list.filter(s => String(s.status).toUpperCase() === "ACTIVE")
+            : [];
+
         const savedSid = localStorage.getItem("simulationSessionId");
-        if (savedSid && list.some(s => String(s.sessionId) === String(savedSid))) return Number(savedSid);
+        if (savedSid && activeList.some(s => String(s.sessionId) === String(savedSid))) {
+            return Number(savedSid);
+        }
 
-        const active = list.find(s => String(s.status).toUpperCase() === "ACTIVE");
-        if (active?.sessionId) return Number(active.sessionId);
+        if (activeList.length === 0) return null;
 
-        const sorted = [...list].sort((a, b) => {
+        const sortedActive = [...activeList].sort((a, b) => {
             const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
             if (ad !== bd) return bd - ad;
             return (Number(b.sessionId) || 0) - (Number(a.sessionId) || 0);
         });
-        return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
+
+        return Number(sortedActive[0].sessionId);
     };
 
     const restoreSession = async (sid, listForMeta = null) => {
         if (!sid) return;
+
         localStorage.setItem("simulationSessionId", String(sid));
 
-        // 목록 기반 세션 메타 먼저 세팅(없으면 최소값)
         const meta = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
         if (meta) setSession(meta);
         else setSession({ sessionId: sid });
 
-        const restoreSession = async (sid, listForMeta = null) => {
-            if (!sid) return;
-            localStorage.setItem("simulationSessionId", String(sid));
-
-            const meta = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
-            if (meta) setSession(meta);
-            else setSession({ sessionId: sid });
-
-            await fetchSessionDetail(sid);
-            await fetchDayData(sid);
-            await fetchPortfolio(sid);
-            await fetchTrades(sid);
-        };
+        await fetchSessionDetail(sid);
+        await fetchDayData(sid);
+        await fetchPortfolio(sid);
+        await fetchTrades(sid);
     };
 
     // ===== 내 정보 수정 저장(현재 서버 API가 명확하지 않아서 UI만 유지) =====
@@ -361,7 +370,7 @@ const Portfolio = () => {
             // api는 Portfolio.jsx 상단에 정의된 axios 인스턴스
             const response = await api.patch('/user/me', updatePayload);
 
-            if (response.data.status.toLowerCase() === "success") {
+            if (isSuccess(response.data)) {
                 alert("내 정보가 성공적으로 수정되었습니다.");
                 setUserInfo(updatePayload);
                 if (editData.password) {
@@ -478,12 +487,14 @@ const Portfolio = () => {
             await fetchUserInfo();
 
             const list = await fetchSessions();
-            if (list.length === 0) return;
+            const sidToRestore = pickSessionIdToRestore(list);
 
-            const sid = pickSessionIdToRestore(list);
-            if (sid) await restoreSession(sid, list);
+            if (sidToRestore) {
+                await restoreSession(sidToRestore, list);
+            } else {
+                clearCurrentProgress();
+            }
         })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
@@ -503,8 +514,7 @@ const Portfolio = () => {
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button onClick={() => setIsProfileModalOpen(true)} className="hover:underline font-jua cursor-pointer">내 정보</button>
                     <span className='font-bold mb-2'>|</span>
-                    <button onClick={() => navigate('/login')} className="hover:underline font-jua cursor-pointer">로그아웃</button>
-                </div>
+                    <button onClick={handleLogout} className="hover:underline font-jua cursor-pointer">로그아웃</button>                </div>
             </div>
 
             {/* [메인 컨텐츠 영역] */}
@@ -578,7 +588,7 @@ const Portfolio = () => {
                                             <th>종목명</th>
                                             <th>거래대금</th>
                                             <th>거래량</th>
-                                            <th>수익</th>
+                                            <th>손익</th>
                                             <th>날짜</th>
                                         </tr>
                                     </thead>
@@ -741,7 +751,7 @@ const Portfolio = () => {
                                 className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
                             >
                                 <img src={logout} alt="logout" className='w-13' />
-                                <span>메인 페이지로</span>
+                                <span>닫기</span>
                             </button>
                         </div>
                     </div>
