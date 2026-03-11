@@ -54,11 +54,14 @@ const Password = () => {
   };
 
   const resetPassword = (email, code, newPassword) => {
-    return publicApi.post('/user/password/reset', {
-      email: String(email || "").trim().toLowerCase(),
-      code: String(code || "").trim(),
-      newPassword: String(newPassword || "").trim()
-    });
+
+    const payload = {
+      email: String(email || '').trim(),
+      code: String(code || '').trim(),
+      newPassword: String(newPassword || '')
+    };
+
+    return publicApi.post('/user/password/reset', payload);
   };
 
   /// 비밀번호 재설정 통합 제출 핸들러
@@ -98,9 +101,13 @@ const Password = () => {
         }
       }
     } catch (error) {
-      console.error("Error Detail:", {
-        status: error.response?.status,
-        data: error.response?.data,
+      console.error('[PASSWORD API ERROR]', {
+        requestUrl: error.config?.url,
+        requestMethod: error.config?.method,
+        requestHeaders: error.config?.headers,
+        requestData: error.config?.data,
+        responseStatus: error.response?.status,
+        responseData: error.response?.data,
         message: error.message
       });
 
@@ -185,10 +192,6 @@ const Password = () => {
                     placeholder="이메일로 받은 인증 코드를 입력해주세요."
                     {...register("authCode", {
                       required: "인증 코드를 입력해주세요.",
-                      pattern: {
-                        value: /^[A-Za-z0-9]+$/,
-                        message: "영문과 숫자로 된 인증 코드를 입력해주세요."
-                      }
                     })} className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('authCode')}`}
                   />
                   {errors.authCode && <p className="text-red-500 text-xs font-bold">{errors.authCode.message}</p>}
