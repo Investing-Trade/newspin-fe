@@ -158,6 +158,33 @@ const Trade = () => {
         ],
     };
 
+    // 세션 삭제 시: 기록까지 전부 제거
+    const clearAllSessionState = () => {
+        localStorage.removeItem("simulationSessionId");
+        setSession(null);
+        setDayData(null);
+        setPortfolio(null);
+        setTrades([]);
+        setReport(null);
+    };
+
+    // 세션 종료 시: 진행 정보만 제거하고 완료 정보(report, completed session)는 유지
+    const clearActiveProgressOnly = () => {
+        localStorage.removeItem("simulationSessionId");
+        setDayData(null);
+        setPortfolio(null);
+        setTrades([]);
+    };
+
+    const clearCurrentProgress = () => {
+        localStorage.removeItem("simulationSessionId");
+        setSession(null);
+        setDayData(null);
+        setPortfolio(null);
+        setTrades([]);
+        setReport(null);
+    };
+
     const currentStocks = STOCK_CATEGORIES[selectedCategory] ?? [];
 
     // ✅ 카테고리 바뀌었는데 현재 stockCode가 그 카테고리에 없으면 첫 종목으로 맞춤
@@ -300,7 +327,7 @@ const Trade = () => {
     const fetchSessions = async () => {
         try {
             const res = await api.get('/simulation/sessions');
-            if (res.data.status === "SUCCESS" && Array.isArray(res.data.data)) {
+            if (isSuccess(res.data) && Array.isArray(res.data.data)) {
                 const list = res.data.data;
                 setSessions(list);
                 return list;
@@ -343,10 +370,24 @@ const Trade = () => {
                 return;
             }
 
-            clearCurrentProgress();
+            //  완료된 세션 상세를 다시 조회해서 status를 COMPLETED로 맞춤
+            const latestSession = await fetchSessionDetail(sid);
+
+            //  완료 세션은 리포트를 남겨야 하므로 report 조회
+            await fetchReport(sid);
+
+            //  더 이상 진행 중 세션이 아니므로 active sessionId만 제거
+            localStorage.removeItem("simulationSessionId");
+
+            //  진행용 데이터만 비움 (차트/포트폴리오/거래창)
+            setDayData(null);
+            setPortfolio(null);
+            setTrades([]);
+
+            //  세션 목록 갱신
             await fetchSessions();
 
-            alert("세션이 종료되어 현재 투자 진행 정보가 초기화되었습니다.");
+            alert("세션이 종료되었습니다. 완료된 투자 결과는 유지됩니다.");
         } catch (e) {
             console.error("complete error:", e);
             alert("세션 완료 처리 중 오류가 발생했습니다.");
@@ -355,22 +396,29 @@ const Trade = () => {
 
     // 목록에서 복구할 세션 선택(저장된 sid 우선 → ACTIVE 우선 → 최신)
     const pickSessionIdToRestore = (list) => {
+        // ACTIVE 세션만 복구 대상으로 제한
+        const activeList = Array.isArray(list)
+            ? list.filter(s => String(s.status).toUpperCase() === "ACTIVE")
+            : [];
+
         const savedSid = localStorage.getItem("simulationSessionId");
-        if (savedSid && list.some(s => String(s.sessionId) === String(savedSid))) {
+
+        // 저장된 sessionId도 ACTIVE일 때만 복구
+        if (savedSid && activeList.some(s => String(s.sessionId) === String(savedSid))) {
             return Number(savedSid);
         }
 
-        const active = list.find(s => String(s.status).toUpperCase() === "ACTIVE");
-        if (active) return Number(active.sessionId);
+        if (activeList.length === 0) return null;
 
-        // 최신 세션(가능하면 createdAt 기준, 없으면 sessionId 큰 것)
-        const sorted = [...list].sort((a, b) => {
+        // ACTIVE 세션 중 최신 것만 복구
+        const sortedActive = [...activeList].sort((a, b) => {
             const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
             if (ad !== bd) return bd - ad;
             return (Number(b.sessionId) || 0) - (Number(a.sessionId) || 0);
         });
-        return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
+
+        return Number(sortedActive[0].sessionId);
     };
 
     // sid로 현재 세션 세팅 + 관련 데이터 로딩
@@ -474,10 +522,12 @@ const Trade = () => {
                 return;
             }
 
-            clearCurrentProgress();
+            // 삭제는 기록 자체 제거
+            clearAllSessionState();
+
             await fetchSessions();
 
-            alert("세션이 삭제되어 현재 투자 진행 정보도 함께 제거되었습니다.");
+            alert("세션이 삭제되었습니다.");
         } catch (e) {
             console.error("delete error:", e);
             alert("세션 삭제 중 오류가 발생했습니다.");
@@ -589,17 +639,17 @@ const Trade = () => {
 
             await fetchUserInfo();
 
-            // 세션 복구 프로세스
+            // ACTIVE 세션만 복구
             const list = await fetchSessions();
-            const savedSid = localStorage.getItem("simulationSessionId");
+            const sidToRestore = pickSessionIdToRestore(list);
 
-            if (savedSid && list.length > 0) {
-                // 저장된 ID가 있고 실제 서버 목록에도 존재하는지 확인 후 복구
-                await restoreSession(Number(savedSid), list);
-            } else if (list.length > 0) {
-                // 저장된 ID가 없으면 목록 중 가장 최근(또는 ACTIVE) 세션으로 자동 선택
-                const latestSid = pickSessionIdToRestore(list);
-                if (latestSid) await restoreSession(latestSid, list);
+            if (sidToRestore) {
+                await restoreSession(sidToRestore, list);
+            } else {
+                // 진행 중 세션이 없으면 진행용 상태 초기화
+                setDayData(null);
+                setPortfolio(null);
+                setTrades([]);
             }
         })();
     }, []);
@@ -1119,7 +1169,7 @@ const Trade = () => {
                                     className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
                                 >
                                     <img src={logout} alt="logout" className='w-13' />
-                                    <span>메인 페이지로</span>
+                                    <span>닫기</span>
                                 </button>
                             </div>
                         </div>

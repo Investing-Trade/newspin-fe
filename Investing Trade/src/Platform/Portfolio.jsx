@@ -216,7 +216,6 @@ const Portfolio = () => {
         try {
             const res = await api.get('/simulation/sessions');
             if (isSuccess(res.data) && Array.isArray(res.data.data)) {
-                setSessions(res.data.data);
                 return res.data.data;
             }
         } catch (e) {
