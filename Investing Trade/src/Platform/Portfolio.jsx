@@ -475,26 +475,37 @@ const Portfolio = () => {
     const remain = dday(endDate, currentDate);
 
     useEffect(() => {
+        // 페이지 제목
         document.title = "NewsPin - Portfolio";
-    }, []);
 
-    useEffect(() => {
-        (async () => {
+        const initPortfolioPage = async () => {
             const token = getAccessToken();
-            if (!token) return navigate("/login");
+            if (!token) {
+                navigate("/login");
+                return;
+            }
 
+            // 사용자 정보 먼저 복구
             await fetchUserInfo();
 
+            // 서버에서 현재 세션 목록 조회
             const list = await fetchSessions();
+
+            // ACTIVE 세션만 복구 대상으로 선택
             const sidToRestore = pickSessionIdToRestore(list);
 
             if (sidToRestore) {
+                // 진행 중 세션이 있으면 기존처럼 진행 정보 복구
                 await restoreSession(sidToRestore, list);
             } else {
+                //  세션 중단/삭제 후 ACTIVE 세션이 없으면
+                //  사용자에게 보이는 진행 정보(session/dayData/portfolio/trades)를 초기화
                 clearCurrentProgress();
             }
-        })();
-    }, []);
+        };
+
+        initPortfolioPage();
+    }, [navigate]);
 
     return (
         <div className="w-full h-screen bg-blue-700 flex flex-col items-center md:p-2 font-agbalumo overflow-hidden">
