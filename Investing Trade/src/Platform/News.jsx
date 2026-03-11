@@ -137,7 +137,7 @@ const News = () => {
         setError(null);
 
         try {
-            const loaded = await fetchTodayNewsFromSession();
+            const loaded = await fetchRandomNews();
 
             if (!loaded) {
                 setNewsData(null);
@@ -197,6 +197,7 @@ const News = () => {
         }
     };
 
+    // ✅ "다음 뉴스" 버튼 클릭 시 랜덤 뉴스 새로 조회
     const handleNextNews = async () => {
         const token = getAccessToken();
         if (!token) {
@@ -208,38 +209,14 @@ const News = () => {
         setError(null);
 
         try {
-            const sessionId = await getCurrentSessionId();
-            if (!sessionId) return;
+            const loaded = await fetchRandomNews();
 
-            const response = await api.post(`/simulation/sessions/${sessionId}/next-day`);
-
-            if (isSuccess(response.data)) {
-                // 날짜가 하루 넘어갔으므로 새 날짜의 뉴스 재조회
-                const loaded = await fetchTodayNewsFromSession();
-
-                if (!loaded) {
-                    setNewsData(null);
-                    setAiResult(null);
-                    setUserComment("");
-                    setSelectedSentiment(null);
-                    setError("다음 날짜의 뉴스가 없습니다.");
-                }
-            } else {
-                setError(response.data?.message || "다음 날짜로 이동하지 못했습니다.");
-            }
-        } catch (error) {
-            console.error("next-day 호출 실패:", {
-                status: error.response?.status,
-                data: error.response?.data,
-                message: error.message
-            });
-
-            if (error.response?.status === 401 || error.response?.status === 403) {
-                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
-                localStorage.clear();
-                navigate('/login');
-            } else {
-                setError(error.response?.data?.message || "다음 날짜 이동 중 오류가 발생했습니다.");
+            if (!loaded) {
+                setNewsData(null);
+                setAiResult(null);
+                setUserComment("");
+                setSelectedSentiment(null);
+                setError("다음 뉴스가 없습니다.");
             }
         } finally {
             setLoading(false);
@@ -315,47 +292,38 @@ const News = () => {
         }
     };
 
-    const fetchTodayNewsFromSession = async () => {
+    // ✅ 랜덤 뉴스 1건 조회 (GET /news/random)
+    // News 페이지에서 표시할 뉴스 데이터를 이 함수로 통일
+    const fetchRandomNews = async () => {
         try {
-            const sessions = await fetchSessions();
-            if (!sessions.length) return false;
+            const response = await api.get('/news/random');
 
-            const sessionId = pickSessionIdToUse(sessions);
-            if (!sessionId) return false;
+            if (isSuccess(response.data) && response.data?.data) {
+                // ✅ 랜덤 뉴스 1건을 화면 상태에 반영
+                setError(null);
+                setNewsData(response.data.data);
 
-            const response = await api.get(`/simulation/sessions/${sessionId}/daily-data`);
+                // ✅ 새 뉴스로 바뀌면 이전 AI 결과 / 사용자 입력 초기화
+                setAiResult(null);
+                setUserComment("");
+                setSelectedSentiment(null);
 
-            if (isSuccess(response.data)) {
-                const todayNews = Array.isArray(response.data?.data?.todayNews)
-                    ? response.data.data.todayNews
-                    : [];
-
-                // 현재 날짜에 표시할 뉴스가 없으면 false 반환
-                if (todayNews.length === 0) {
-                    console.warn("daily-data는 성공했지만 todayNews가 비어 있음");
-                    return false;
-                }
-
-                // 이번 요구사항에서는 "현재 날짜의 대표 뉴스 1개 표시"만 유지
-                // 따라서 첫 번째 뉴스만 사용
-                const pickedNews = todayNews[0];
-
-                if (pickedNews) {
-                    setError(null);
-                    setNewsData(pickedNews);
-                    setAiResult(null);
-                    setUserComment("");
-                    setSelectedSentiment(null);
-                    return true;
-                }
+                return true;
             }
         } catch (error) {
-            console.error("daily-data 뉴스 조회 실패:", {
+            console.error("random 뉴스 조회 실패:", {
                 status: error.response?.status,
                 data: error.response?.data,
                 message: error.message
             });
+
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+            }
         }
+
         return false;
     };
 

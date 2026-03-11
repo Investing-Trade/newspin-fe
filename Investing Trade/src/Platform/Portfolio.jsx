@@ -3,7 +3,6 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-
 import logout from '../assets/logout.png';
 import correction from '../assets/correction-tape.png';
 import dashboard from '../assets/dashboard.png';
@@ -91,7 +90,7 @@ const Portfolio = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
     const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
-
+    const [hasActiveSession, setHasActiveSession] = useState(false); // 현재 복구 가능한 ACTIVE 세션이 있는지 여부, 이 값으로 보유 종목/거래 내역/투자 환경 정보를 렌더링할지 결정
     // ===== 시뮬레이션/포트폴리오/거래내역 상태 =====
     const [session, setSession] = useState(null);        // 세션 상세/메타
     const [portfolio, setPortfolio] = useState(null);    // 잔고 + 보유종목(가능하면)
@@ -286,8 +285,15 @@ const Portfolio = () => {
         navigate('/login');
     };
 
+    // Portfolio 화면에서 진행 중 세션 관련 표시 데이터를 모두 초기화, 세션 완료/삭제 후에는 사용자에게 이전 투자 정보가 보이지 않도록 처리
+    // 진행 중 세션이 없을 때 투자 환경 관련 숫자 정보를 비우는 초기화 함수
     const clearCurrentProgress = () => {
         localStorage.removeItem("simulationSessionId");
+
+        // ACTIVE 세션 없음 처리
+        setHasActiveSession(false);
+
+        // 세션/포트폴리오/거래 상태 초기화
         setSession(null);
         setDayData(null);
         setPortfolio(null);
@@ -343,8 +349,13 @@ const Portfolio = () => {
         return Number(sortedActive[0].sessionId);
     };
 
+    // ACTIVE 세션이 존재할 때 Portfolio 화면에 진행 데이터를 복구
+    // ACTIVE 세션이 있을 때만 투자 환경 숫자 정보를 복구
     const restoreSession = async (sid, listForMeta = null) => {
         if (!sid) return;
+
+        // ACTIVE 세션 존재 표시
+        setHasActiveSession(true);
 
         localStorage.setItem("simulationSessionId", String(sid));
 
@@ -357,7 +368,6 @@ const Portfolio = () => {
         await fetchPortfolio(sid);
         await fetchTrades(sid);
     };
-
     // ===== 내 정보 수정 저장(현재 서버 API가 명확하지 않아서 UI만 유지) =====
     const handleUpdateInfo = async () => {
         const updatePayload = {
@@ -466,13 +476,31 @@ const Portfolio = () => {
         });
     }, [trades, codeToName]);
 
-    // ===== 투자 환경 표시값(세션/포트폴리오/일자) =====
-    const startDate = session?.startDate ?? session?.period?.startDate ?? '-';
-    const endDate = session?.endDate ?? session?.period?.endDate ?? '-';
-    const initialCapital = session?.initialCapital ?? session?.config?.initialCapital ?? 0;
-    const currentCapital = portfolio?.currentCapital ?? portfolio?.cash ?? portfolio?.balance ?? 0;
-    const currentDate = dayData?.simulationDate ?? session?.simulationDate ?? session?.currentDate ?? '-';
-    const remain = dday(endDate, currentDate);
+    // ===== 투자 환경 표시값(세션/포트폴리오/일자) ===== 
+    // ACTIVE 세션이 있을 때만 투자 환경 숫자 정보를 계산, 세션이 없으면 화면에는 빈 값('')만 표시되도록 처리
+    const startDate = hasActiveSession
+        ? (session?.startDate ?? session?.period?.startDate ?? '')
+        : '';
+
+    const endDate = hasActiveSession
+        ? (session?.endDate ?? session?.period?.endDate ?? '')
+        : '';
+
+    const initialCapital = hasActiveSession
+        ? (session?.initialCapital ?? session?.config?.initialCapital ?? '')
+        : '';
+
+    const currentCapital = hasActiveSession
+        ? (portfolio?.currentCapital ?? portfolio?.cash ?? portfolio?.balance ?? '')
+        : '';
+
+    const currentDate = hasActiveSession
+        ? (dayData?.simulationDate ?? session?.simulationDate ?? session?.currentDate ?? '')
+        : '';
+
+    const remain = hasActiveSession && endDate && currentDate
+        ? dday(endDate, currentDate)
+        : null;
 
     useEffect(() => {
         // 페이지 제목
@@ -494,12 +522,11 @@ const Portfolio = () => {
             // ACTIVE 세션만 복구 대상으로 선택
             const sidToRestore = pickSessionIdToRestore(list);
 
+            // ACTIVE 세션이 있으면 진행 정보 복구
             if (sidToRestore) {
-                // 진행 중 세션이 있으면 기존처럼 진행 정보 복구
                 await restoreSession(sidToRestore, list);
             } else {
-                //  세션 중단/삭제 후 ACTIVE 세션이 없으면
-                //  사용자에게 보이는 진행 정보(session/dayData/portfolio/trades)를 초기화
+                // ACTIVE 세션이 없으면 이전 투자 정보가 남지 않도록 전체 초기화
                 clearCurrentProgress();
             }
         };
@@ -632,15 +659,18 @@ const Portfolio = () => {
                                 </h3>
                                 <div className="grid grid-cols-2 gap-x-8">
                                     <div className="space-y-2 ml-2 mt-3">
+                                        {/*  항목명은 유지하고, ACTIVE 세션이 없으면 값만 빈칸으로 표시 */}
                                         <p className="text-[15px] text-black">시작 날짜 : {startDate}</p>
                                         <p className="text-[15px] text-black">종료 날짜 : {endDate}</p>
+
                                         <p className="text-[15px] text-black mt-5">초기 자본 :</p>
                                         <p className="text-md text-gray-500 mt-2 font-bold underline decoration-yellow-400 underline-offset-4">
-                                            {formatMoney(initialCapital)}
+                                            {initialCapital !== '' ? formatMoney(initialCapital) : ''}
                                         </p>
+
                                         <p className="text-md text-black mt-5">현재 잔고 :</p>
                                         <p className="text-lg font-bold text-indigo-600 underline underline-offset-4 decoration-indigo-200">
-                                            {formatMoney(currentCapital)}
+                                            {currentCapital !== '' ? formatMoney(currentCapital) : ''}
                                         </p>
                                     </div>
                                     <div className="text-right space-y-4">

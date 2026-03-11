@@ -159,16 +159,18 @@ const Trade = () => {
         ],
     };
 
-    // 세션 삭제 시 모든 진행/결과 데이터를 완전히 초기화
+    // 세션과 관련된 진행/피드백/결과 상태를 모두 초기화
     const clearAllSessionState = () => {
         localStorage.removeItem("simulationSessionId");
+
+        // 진행 중 세션 관련 상태 제거
         setSession(null);
         setDayData(null);
         setPortfolio(null);
         setTrades([]);
-        setReport(null);
 
-        // 진행 중 피드백 상태도 함께 초기화
+        // 투자 결과/피드백 상태 제거
+        setReport(null);
         setCurrentFeedback(null);
         setHasRequestedFeedback(false);
     };
@@ -379,12 +381,14 @@ const Trade = () => {
         return null;
     };
 
-    // 세션 완료 처리 (PUT /simulation/sessions/{sessionId}/complete)
+    // 세션 완료 처리
+    // 서버에는 완료 상태를 저장하고, 프론트에서는 진행 중 데이터가 더 이상 보이지 않도록 초기화
     const handleCompleteSession = async () => {
         const sid = session?.sessionId;
         if (!sid) return alert("세션이 없습니다.");
 
         try {
+            // 서버에 세션 완료 요청 전달
             const res = await api.put(`/simulation/sessions/${sid}/complete`);
             console.log("complete session:", res.data);
 
@@ -393,28 +397,23 @@ const Trade = () => {
                 return;
             }
 
-            //  완료된 세션 상세를 다시 조회해서 status를 COMPLETED로 맞춤
-            const latestSession = await fetchSessionDetail(sid);
-
-            //  완료 세션은 리포트를 남겨야 하므로 report 조회
-            await fetchReport(sid);
-
-            //  더 이상 진행 중 세션이 아니므로 active sessionId만 제거
+            // 완료된 세션은 더 이상 진행 중 세션이 아니므로 localStorage에서 제거
             localStorage.removeItem("simulationSessionId");
 
-            //  진행용 데이터만 비움 (차트/포트폴리오/거래창)
+            // 프론트 진행 화면에 보이던 데이터 전부 초기화
+            // Portfolio 페이지에서도 ACTIVE 세션 복구가 안 되도록 현재 상태를 명확히 비움
+            setSession(null);
             setDayData(null);
             setPortfolio(null);
             setTrades([]);
-
-            // 진행 중 피드백 상태 초기화
+            setReport(null);
             setCurrentFeedback(null);
             setHasRequestedFeedback(false);
 
-            //  세션 목록 갱신
+            // 세션 목록 재조회
             await fetchSessions();
 
-            alert("세션이 종료되었습니다. 완료된 투자 결과는 유지됩니다.");
+            alert("세션이 완료 처리되었고, 진행 정보는 초기화되었습니다.");
         } catch (e) {
             console.error("complete error:", e);
             alert("세션 완료 처리 중 오류가 발생했습니다.");
@@ -536,7 +535,8 @@ const Trade = () => {
         }
     };
 
-    // 세션 삭제 (DELETE /simulation/sessions/{sessionId})
+    // 세션 삭제 처리
+    // 서버에는 삭제 요청을 보내고, 프론트에서는 관련 진행 데이터를 모두 제거
     const handleDeleteSession = async () => {
         const sid = session?.sessionId;
         if (!sid) return alert("세션이 없습니다.");
@@ -545,6 +545,7 @@ const Trade = () => {
         if (!ok) return;
 
         try {
+            // 서버에 세션 삭제 요청 전달
             const res = await api.delete(`/simulation/sessions/${sid}`);
             console.log("delete session:", res.data);
 
@@ -553,12 +554,13 @@ const Trade = () => {
                 return;
             }
 
-            // 삭제는 기록 자체 제거
+            // 삭제된 세션은 더 이상 복구되면 안 되므로 진행 상태 전체 초기화
             clearAllSessionState();
 
+            // 세션 목록 재조회
             await fetchSessions();
 
-            alert("세션이 삭제되었습니다.");
+            alert("세션이 삭제되었고, 관련 진행 정보도 초기화되었습니다.");
         } catch (e) {
             console.error("delete error:", e);
             alert("세션 삭제 중 오류가 발생했습니다.");
