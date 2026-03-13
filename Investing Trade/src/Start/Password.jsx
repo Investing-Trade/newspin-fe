@@ -61,7 +61,7 @@ const Password = () => {
       newPassword: String(newPassword || '')
     };
 
-    return publicApi.post('/user/password/reset', payload);
+    return publicApi.patch('/user/password/reset', payload);
   };
 
   /// 비밀번호 재설정 통합 제출 핸들러
