@@ -4,7 +4,6 @@ import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import logout from '../assets/logout.png';
-import correction from '../assets/correction-tape.png';
 import dashboard from '../assets/dashboard.png';
 import bio from '../assets/bio-gas.png';
 import it from '../assets/it.png';
@@ -19,8 +18,6 @@ import clock from '../assets/clock.png';
 import calendar from '../assets/calendar.png';
 import stocks from '../assets/stock-exchange.png';
 import axios from 'axios';
-import save from '../assets/save.png';
-import { Eye, EyeOff } from 'lucide-react';
 
 const api = axios.create({
     baseURL: "http://52.78.151.56:8080",
@@ -86,10 +83,7 @@ const Portfolio = () => {
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
     // ===== 내 정보 모달 상태(기존 UI 유지 위해 추가) =====
-    const [isEditing, setIsEditing] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
     const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
-    const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
     const [hasActiveSession, setHasActiveSession] = useState(false); // 현재 복구 가능한 ACTIVE 세션이 있는지 여부, 이 값으로 보유 종목/거래 내역/투자 환경 정보를 렌더링할지 결정
     // ===== 시뮬레이션/포트폴리오/거래내역 상태 =====
     const [session, setSession] = useState(null);        // 세션 상세/메타
@@ -204,7 +198,6 @@ const Portfolio = () => {
                 };
 
                 setUserInfo(info);
-                setEditData(info);
             }
         } catch (e) {
             console.error("fetchUserInfo error:", e);
@@ -368,30 +361,7 @@ const Portfolio = () => {
         await fetchPortfolio(sid);
         await fetchTrades(sid);
     };
-    // ===== 내 정보 수정 저장(현재 서버 API가 명확하지 않아서 UI만 유지) =====
-    const handleUpdateInfo = async () => {
-        const updatePayload = {
-            ...editData,
-            password: editData.password || userInfo.password
-        };
-
-        try {
-            // api는 Portfolio.jsx 상단에 정의된 axios 인스턴스
-            const response = await api.patch('/user/me', updatePayload);
-
-            if (isSuccess(response.data)) {
-                alert("내 정보가 성공적으로 수정되었습니다.");
-                setUserInfo(updatePayload);
-                if (editData.password) {
-                    localStorage.setItem('userPwd', editData.password);
-                }
-                setIsEditing(false);
-                setShowPassword(false);
-            }
-        } catch (error) {
-            alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
-        }
-    };
+   
     // ===== 섹션(보유종목) 데이터 구성: API 응답 형태가 달라도 최대한 맞춰서 표시 =====
     const holdingsMap = useMemo(() => {
         const rawItems = Array.isArray(portfolio?.items) ? portfolio.items : [];
@@ -724,10 +694,9 @@ const Portfolio = () => {
                                 <label className="block mb-2">아이디</label>
                                 <input
                                     type="text"
-                                    value={isEditing ? editData.userId : userInfo.userId}
-                                    onChange={(e) => setEditData({ ...editData, userId: e.target.value })}
-                                    readOnly={!isEditing}
-                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                    value={userInfo.userId}
+                                    readOnly
+                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold`}
                                 />
                             </div>
 
@@ -736,38 +705,10 @@ const Portfolio = () => {
                                 <label className="block mb-2">이메일</label>
                                 <input
                                     type="email"
-                                    value={isEditing ? editData.email : userInfo.email}
-                                    onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                                    readOnly={!isEditing}
-                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                    value={ userInfo.email}
+                                    readOnly
+                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold `}
                                 />
-                            </div>
-
-                            {/* 비밀번호 필드: lucide icon 토글 적용 */}
-                            <div>
-                                <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
-                                <div className="relative">
-                                    <input
-                                        type={showPassword ? "text" : "password"}
-
-                                        // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
-                                        value={isEditing ? editData.password
-                                            : userInfo.password}
-
-                                        onChange={(e) => setEditData({ ...editData, password: e.target.value })}
-                                        readOnly={!isEditing}
-                                        placeholder={isEditing ? "새 비밀번호 입력" : ""}
-                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
-                                    />
-                                    {/* 수정 중이 아닐 때도 비밀번호를 볼 수 있도록 버튼 상시 활성화 */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
-                                    >
-                                        {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
-                                    </button>
-                                </div>
                             </div>
 
                         </div>
@@ -775,19 +716,8 @@ const Portfolio = () => {
                         <hr className="border-gray-300 mb-8" />
 
                         <div className="flex gap-4 space-x-6">
-                            {isEditing ? (
-                                <button onClick={handleUpdateInfo} className="flex-1 bg-sky-500 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-sky-600">
-                                    <img src={save} alt="save" className='w-12' />
-                                    <span>저장하기</span>
-                                </button>
-                            ) : (
-                                <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
-                                    <img src={correction} alt="correct" className='w-12' />
-                                    <span>수정하기</span>
-                                </button>
-                            )}
                             <button
-                                onClick={() => { setIsProfileModalOpen(false); setIsEditing(false); setShowPassword(false); }}
+                                onClick={() => { setIsProfileModalOpen(false) }}
                                 className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
                             >
                                 <img src={logout} alt="logout" className='w-13' />
