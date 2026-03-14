@@ -8,11 +8,8 @@ import dislike from '../assets/dislike.png';
 import submit from '../assets/submit.png';
 import logout from '../assets/logout.png';
 import refresh from '../assets/re.png';
-import correction from '../assets/correction-tape.png';
 import axios from 'axios';
 import exit from '../assets/exit.png';
-import save from '../assets/save.png';
-import { Eye, EyeOff } from 'lucide-react';
 
 let newsPageInitialized = false;
 
@@ -75,8 +72,6 @@ const isSuccess = (data) => {
 const News = () => {
     const navigate = useNavigate();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
     const [newsData, setNewsData] = useState(null);
     const [userComment, setUserComment] = useState("");
     const [selectedSentiment, setSelectedSentiment] = useState(null);
@@ -85,7 +80,6 @@ const News = () => {
     const [submittingOpinion, setSubmittingOpinion] = useState(false);
     const [error, setError] = useState(null);
     const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
-    const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
 
     // 내 정보 불러오기 (GET /user/me)
     const fetchUserInfo = async () => {
@@ -96,14 +90,11 @@ const News = () => {
                 const { userId, email } = response.data.data ?? {};
                 const savedPwd = localStorage.getItem("userPwd") || "";
 
-                const fetchedInfo = {
+                setUserInfo({
                     userId: userId ?? "",
                     email: email ?? "",
                     password: savedPwd,
-                };
-
-                setUserInfo(fetchedInfo);
-                setEditData(fetchedInfo);
+                });
             }
         } catch (error) {
             console.error("내 정보 조회 실패:", error);
@@ -232,12 +223,18 @@ const News = () => {
 
         try {
             const sessionId = await getCurrentSessionId();
-            if (!sessionId) return;
+
+            // 진행 중인 세션이 없어도 투자 메인으로 이동
+            if (!sessionId) {
+                alert("진행 중인 세션이 없어 투자 화면으로 이동합니다.");
+                navigate('/main');
+                return;
+            }
 
             const response = await api.put(`/simulation/sessions/${sessionId}/complete`);
 
             if (isSuccess(response.data)) {
-                navigate('/main');
+                navigate('/invest');
             } else {
                 alert(response.data?.message || "학습 종료 처리에 실패했습니다.");
             }
@@ -256,41 +253,7 @@ const News = () => {
                 alert(error.response?.data?.message || "학습 종료 중 오류가 발생했습니다.");
             }
         }
-    };
-
-    // 내 정보 수정하기 연동 (PATCH /user/me)
-    const handleUpdateInfo = async () => {
-        const updatePayload = {
-            ...editData,
-            password: editData.password || userInfo.password
-        };
-
-        try {
-            const response = await api.patch('/user/me', updatePayload);
-
-            if (isSuccess(response.data)) {
-                alert("내 정보가 성공적으로 수정되었습니다.");
-                setUserInfo(updatePayload);
-
-                if (editData.password) {
-                    localStorage.setItem("userPwd", editData.password);
-                }
-
-                setIsEditing(false);
-                setShowPassword(false);
-            }
-        } catch (error) {
-            if (error.response?.status === 401 || error.response?.status === 403) {
-                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
-                localStorage.clear();
-                navigate('/login');
-                return;
-            }
-
-            const msg = error.response?.data?.message || "수정 중 오류가 발생했습니다.";
-            alert(msg);
-        }
-    };
+    }
 
     // ✅ 랜덤 뉴스 1건 조회 (GET /news/random)
     // News 페이지에서 표시할 뉴스 데이터를 이 함수로 통일
@@ -447,10 +410,7 @@ const News = () => {
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button
                         onClick={() => {
-                            setEditData(userInfo);
                             setIsProfileModalOpen(true);
-                            setIsEditing(false);
-                            setShowPassword(false);
                         }}
                         className="hover:underline font-jua cursor-pointer"
                     >
@@ -612,10 +572,9 @@ const News = () => {
                                     <label className="block mb-2">아이디</label>
                                     <input
                                         type="text"
-                                        value={isEditing ? editData.userId : userInfo.userId}
-                                        onChange={(e) => setEditData({ ...editData, userId: e.target.value })}
-                                        readOnly={!isEditing}
-                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                        value={userInfo.userId}
+                                        readOnly
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold`}
                                     />
                                 </div>
 
@@ -624,58 +583,18 @@ const News = () => {
                                     <label className="block mb-2">이메일</label>
                                     <input
                                         type="email"
-                                        value={isEditing ? editData.email : userInfo.email}
-                                        onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                                        readOnly={!isEditing}
-                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                        value={userInfo.email}
+                                        readOnly
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold `}
                                     />
                                 </div>
-
-                                {/* 비밀번호 필드 */}
-                                <div>
-                                    <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPassword ? "text" : "password"}
-
-                                            // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
-                                            value={isEditing ? editData.password
-                                                : userInfo.password}
-
-                                            onChange={(e) => setEditData({ ...editData, password: e.target.value })}
-                                            readOnly={!isEditing}
-                                            placeholder={isEditing ? "새 비밀번호 입력" : ""}
-                                            className={`w-full border-2 border-black rounded-xl p-3 font-jua pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
-                                        />
-                                        {/* 수정 중이 아닐 때도 비밀번호를 볼 수 있도록 버튼 상시 활성화 */}
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
-                                        >
-                                            {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
-                                        </button>
-                                    </div>
-                                </div>
-
                             </div>
 
                             <hr className="border-gray-300 mb-8" />
 
                             <div className="flex gap-4 space-x-6">
-                                {isEditing ? (
-                                    <button onClick={handleUpdateInfo} className="flex-1 bg-sky-500 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-sky-600">
-                                        <img src={save} alt="save" className='w-12' />
-                                        <span>저장하기</span>
-                                    </button>
-                                ) : (
-                                    <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
-                                        <img src={correction} alt="correct" className='w-12' />
-                                        <span>수정하기</span>
-                                    </button>
-                                )}
                                 <button
-                                    onClick={() => { setIsProfileModalOpen(false); setIsEditing(false); setShowPassword(false); }}
+                                    onClick={() => { setIsProfileModalOpen(false); }}
                                     className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
                                 >
                                     <img src={logout} alt="logout" className='w-13' />
