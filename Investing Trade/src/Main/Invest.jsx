@@ -12,8 +12,6 @@ import portfolio from '../assets/pie-chart.png';
 import logout from '../assets/logout.png';
 import correction from '../assets/correction-tape.png';
 import axios from 'axios';
-import save from '../assets/save.png';
-import { Eye, EyeOff } from 'lucide-react';
 
 const API_BASE_URL = 'http://52.78.151.56:8080';
 
