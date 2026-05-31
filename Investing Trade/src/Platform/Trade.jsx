@@ -751,7 +751,7 @@ const Trade = () => {
 
         try {
             const response = await api.post(`/simulation/sessions/${session.sessionId}/trades`, {
-                stockId: selectedStock?.stockId,
+                stockCode: selectedStock?.code,  // stockId → stockCode로 변경
                 tradeType: type,
                 quantity: qty,
                 price: Math.round(selectedPrice), // 소수점 제거
