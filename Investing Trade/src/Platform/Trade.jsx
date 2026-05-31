@@ -23,6 +23,7 @@ import completion from '../assets/completion.png';
 import stop from '../assets/stop-sign.png';
 import house from '../assets/house.png';
 import schedule from '../assets/schedule.png';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const api = axios.create({
     baseURL: "http://localhost:8080",
@@ -83,8 +84,7 @@ api.interceptors.response.use(
 
 const Trade = () => {
     const navigate = useNavigate();
-    // 실시간 주가 데이터 상태 (API에서 가져온 데이터)
-    const [stockPrices, setStockPrices] = useState({});
+    const [stockPrices, setStockPrices] = useState({});  // 실시간 주가 데이터 상태 (API에서 가져온 데이터)
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [trades, setTrades] = useState([]);      // 거래 내역 목록
     const [tradesLoading, setTradesLoading] = useState(false);
@@ -92,6 +92,7 @@ const Trade = () => {
     const [session, setSession] = useState(null); // 현재 사용 중인 세션
     const [dayData, setDayData] = useState(null); // 현재 날짜의 뉴스 및 자산 정보
     const [portfolio, setPortfolio] = useState(null); // 포트폴리오 응답
+    const [priceHistory, setPriceHistory] = useState([]); // 차트용 주가 히스토리 데이터 상태 (선택 종목의 날짜별 종가)
     const [report, setReport] = useState(null); //  투자 결과 및 피드백(report API 응답) 상태 추가
     const [selectedCategory, setSelectedCategory] = useState("bio"); // 현재 선택 카테고리
     const [currentFeedback, setCurrentFeedback] = useState(null); // 진행 중 세션에서 버튼 클릭 시 생성되는 현재 시점 피드백 상태
@@ -189,8 +190,12 @@ const Trade = () => {
         setCurrentFeedback(null);
         setHasRequestedFeedback(false);
     };
-
+    // ✅ currentStocks 먼저 선언
     const currentStocks = STOCK_CATEGORIES[selectedCategory] ?? [];
+
+    // ✅ currentStocks 선언 후 selectedStock 선언
+    const selectedStock =
+        currentStocks.find((s) => s.code === tradeOrder.stockCode) ?? currentStocks[0];
 
     // 카테고리 바뀌었는데 현재 stockCode가 그 카테고리에 없으면 첫 종목으로 맞춤
     useEffect(() => {
@@ -216,8 +221,11 @@ const Trade = () => {
         // dayData.simulationDate가 바뀔 때만 실행 (불필요한 중복 호출 방지)
     }, [dayData?.simulationDate]);
 
-    const selectedStock =
-        currentStocks.find((s) => s.code === tradeOrder.stockCode) ?? currentStocks[0];
+    // ✅ 선택 종목 또는 날짜 변경 시 차트 갱신
+    useEffect(() => {
+        if (!selectedStock?.code || !dayData?.simulationDate) return;
+        fetchPriceHistory(selectedStock.code, dayData.simulationDate);
+    }, [selectedStock?.code, dayData?.simulationDate]);
 
     const selectedLabel = selectedStock?.label ?? tradeOrder.stockCode;
     // 기존: const selectedPrice = selectedStock?.price ?? 0;
@@ -256,6 +264,31 @@ const Trade = () => {
             }
         } catch (e) {
             console.error("주가 조회 실패:", e);
+        }
+    };
+
+    // 선택 종목의 주가 히스토리 조회 (차트 표시용)
+    // GET /stocks/price-range?date=yyyy-MM-dd 에서 prices 배열 활용
+    const fetchPriceHistory = async (stockCode, date) => {
+        if (!stockCode || !date) return;
+        try {
+            const res = await api.get(`/stocks/price-range?date=${date}`);
+            if (isSuccess(res.data) && Array.isArray(res.data.data)) {
+                // 선택된 종목만 필터링
+                const targetStock = res.data.data.find(s => s.stockCode === stockCode);
+                if (targetStock && Array.isArray(targetStock.prices)) {
+                    // 날짜순 정렬 후 차트 데이터 형식으로 변환
+                    const history = targetStock.prices
+                        .sort((a, b) => new Date(a.date) - new Date(b.date))
+                        .map(p => ({
+                            date: p.date?.slice(5), // MM-DD 형식으로 표시
+                            price: Math.round(p.closePrice ?? 0),
+                        }));
+                    setPriceHistory(history);
+                }
+            }
+        } catch (e) {
+            console.error("주가 히스토리 조회 실패:", e);
         }
     };
 
@@ -909,19 +942,54 @@ const Trade = () => {
                             </div>
 
                             <div className="flex flex-1 gap-2 overflow-hidden mb-1">
-                                <div className="flex-1 border-2 border-slate-700 rounded-lg flex items-end justify-around p-4 bg-gray-50 relative">
-                                    {/* 가상 차트 (변동성 시각화) */}
-                                    <div className="w-6 bg-green-500" style={{ height: `${Math.random() * 50 + 30}%` }}></div>
-                                    <div className="w-6 bg-red-500" style={{ height: `${Math.random() * 50 + 20}%` }}></div>
-                                    <div className="w-6 bg-green-500" style={{ height: `${Math.random() * 50 + 40}%` }}></div>
+                                {/* ✅ recharts 기반 실제 주가 라인차트로 교체 */}
+                                <div className="flex-1 border-2 border-slate-700 rounded-lg bg-gray-50 p-2 relative">
+                                    {priceHistory.length > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={priceHistory} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                                                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} interval="preserveStartEnd" />
+                                                <YAxis tick={{ fontSize: 9, fill: '#6b7280' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={30} />
+                                                <Tooltip formatter={(value) => [`${value.toLocaleString()}원`, '종가']} labelFormatter={(label) => `날짜: ${label}`} contentStyle={{ fontSize: '11px' }} />
+                                                <Line type="monotone" dataKey="price" stroke="#2563eb" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-gray-400 text-xs">
+                                            투자 시작 후 차트가 표시됩니다
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="w-44 border border-gray-400 rounded p-1 text-[10px] font-jua leading-tight bg-gray-50">
-                                    <p className="font-bold border-b ">← [정보 개요도]</p>
-                                    <ul className="list-disc list-inside space-y-0.5">
-                                        <li>수익률: <span className={dayData?.profitRate >= 0 ? 'text-red-500' : 'text-blue-500'}>{dayData?.profitRate || 0}%</span></li>
-                                        <li>총 자산: {dayData?.totalAsset?.toLocaleString() || 0}원</li>
-                                        <li>가용 잔액: {portfolio?.currentCapital?.toLocaleString() || 0}원</li>
-                                    </ul>
+                                {/* ✅ 카드형 UI로 개선 */}
+                                <div className="w-44 border border-gray-400 rounded p-2 text-[10px] font-jua leading-tight bg-gray-50 flex flex-col gap-2">
+                                    <p className="font-bold border-b pb-1 text-gray-600">📊 투자 현황</p>
+
+                                    <div className="bg-white rounded p-1 border border-gray-200">
+                                        <p className="text-gray-400">수익률</p>
+                                        <p className={`font-bold text-sm ${(dayData?.profitRate ?? 0) >= 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                            {(dayData?.profitRate ?? 0) >= 0 ? '+' : ''}{dayData?.profitRate || 0}%
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-white rounded p-1 border border-gray-200">
+                                        <p className="text-gray-400">총 자산</p>
+                                        <p className="font-bold text-gray-800">
+                                            {dayData?.totalAsset ? `${dayData.totalAsset.toLocaleString()}원` : '-'}
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-white rounded p-1 border border-gray-200">
+                                        <p className="text-gray-400">가용 잔액</p>
+                                        <p className="font-bold text-indigo-600">
+                                            {portfolio?.currentCapital ? `${portfolio.currentCapital.toLocaleString()}원` : '-'}
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-blue-50 rounded p-1 border border-blue-200">
+                                        <p className="text-gray-400">{selectedLabel} 현재가</p>
+                                        <p className="font-bold text-blue-700">
+                                            {selectedPrice ? `${selectedPrice.toLocaleString()}원` : '-'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
