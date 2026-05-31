@@ -25,7 +25,7 @@ import house from '../assets/house.png';
 import schedule from '../assets/schedule.png';
 
 const api = axios.create({
-    baseURL: "http://52.78.151.56:8080",
+    baseURL: "http://localhost:8080",
     withCredentials: false,
 });
 

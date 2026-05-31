@@ -9,8 +9,8 @@ import { Eye, EyeOff } from 'lucide-react';
 import input from '../assets/input.png';
 import axios from 'axios';
 
-// 백엔드 서버 주소 설정
-const API_BASE_URL = 'http://52.78.151.56:8080';
+// 로컬 호스트 8080으로 변경을 위한 수정 - const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = 'http://localhost:8080';
 
 const publicApi = axios.create({
     baseURL: API_BASE_URL,
@@ -514,7 +514,7 @@ const SignUp = () => {
                                 <button
                                     type="button"
                                     onClick={handleVerifyCode}
-                                    disabled={isSubmitting || !emailVerified}
+                                    disabled={isSubmitting || isVerifyingCode}
                                     className="w-full bg-blue-500 border border-white text-sm cursor-pointer text-white font-bold py-3 rounded-lg mt-8 shadow-md hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                 >
                                     <img src={input} alt="input" className="w-5 h-5" />

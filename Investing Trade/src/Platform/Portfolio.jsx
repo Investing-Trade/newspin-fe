@@ -20,7 +20,7 @@ import stocks from '../assets/stock-exchange.png';
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: "http://52.78.151.56:8080",
+    baseURL: "http://localhost:8080",
     withCredentials: false,
 });
 

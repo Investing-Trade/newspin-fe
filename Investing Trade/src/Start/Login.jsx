@@ -7,7 +7,10 @@ import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://52.78.151.56:8080';
+// 로컬 호스트 8080으로 변경을 위한 수정 - const API_BASE_URL = 'http://localhost:8080';
+
+
+const API_BASE_URL = 'http://localhost:8080';
 
 // 로그인 전 api
 const publicApi = axios.create({

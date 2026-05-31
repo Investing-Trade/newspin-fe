@@ -14,7 +14,7 @@ import exit from '../assets/exit.png';
 let newsPageInitialized = false;
 
 const api = axios.create({
-    baseURL: "http://52.78.151.56:8080",
+    baseURL: "http://localhost:8080",
 });
 
 api.interceptors.request.use((config) => {

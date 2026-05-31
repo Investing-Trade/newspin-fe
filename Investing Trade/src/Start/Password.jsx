@@ -8,8 +8,10 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
 
-// 백엔드 서버 주소 설정
-const API_BASE_URL = 'http://52.78.151.56:8080';
+// 로컬 호스트 8080으로 변경을 위한 수정 - const API_BASE_URL = 'http://localhost:8080';
+
+const API_BASE_URL = 'http://localhost:8080';
+
 
 const publicApi = axios.create({
   baseURL: API_BASE_URL,
