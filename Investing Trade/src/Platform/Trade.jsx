@@ -102,7 +102,7 @@ const Trade = () => {
     // 입력 폼 상태
     const [config, setConfig] = useState({
         initialCapital: 1000000,
-        startDate: '2020-01-01',
+        startDate: '2020-01-02',
         endDate: '2020-03-31'
     });
 
@@ -250,7 +250,7 @@ const Trade = () => {
                 // stockCode를 key로, closePrice를 value로 매핑
                 const priceMap = {};
                 res.data.data.forEach((stock) => {
-                    priceMap[stock.stockCode] = Math.round(stock.prices?.[0]?.closePrice ?? 0);
+                    priceMap[stock.stockCode] = stock.prices?.[0]?.closePrice ?? 0;
                 });
                 setStockPrices(priceMap);
             }
@@ -751,10 +751,10 @@ const Trade = () => {
 
         try {
             const response = await api.post(`/simulation/sessions/${session.sessionId}/trades`, {
-                stockCode: selectedStock?.code,  // stockId → stockCode로 변경
+                stockCode: selectedStock?.code,
                 tradeType: type,
                 quantity: qty,
-                price: Math.round(selectedPrice), // 소수점 제거
+                price: selectedPrice, // Math.round 제거
             });
 
             if (isSuccess(response.data)) {
@@ -788,7 +788,7 @@ const Trade = () => {
         return dates;
     };
 
-    const dateOptions = generateDateOptions('2020-01-01', '2020-03-31');
+    const dateOptions = generateDateOptions('2020-01-02', '2020-03-31');
 
     useEffect(() => {
         (async () => {
