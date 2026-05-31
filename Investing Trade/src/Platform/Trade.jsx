@@ -83,7 +83,8 @@ api.interceptors.response.use(
 
 const Trade = () => {
     const navigate = useNavigate();
-
+    // 실시간 주가 데이터 상태 (API에서 가져온 데이터)
+    const [stockPrices, setStockPrices] = useState({});
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [trades, setTrades] = useState([]);      // 거래 내역 목록
     const [tradesLoading, setTradesLoading] = useState(false);
@@ -105,49 +106,52 @@ const Trade = () => {
         endDate: '2020-03-31'
     });
 
-    //  종목 및 수량 관리 상태 수정
+    // 초기 선택 종목을 유한양행(000100)으로 변경
     const [tradeOrder, setTradeOrder] = useState({
-        stockCode: 'CELLTRION',
+        stockCode: '000100',
         quantity: 1,
     });
 
-    //  1) STOCKS를 카테고리별로 분리 (기존 STOCKS 교체)
+    // STOCKS를 카테고리별로 분리 (기존 STOCKS 교체)
     const STOCK_CATEGORIES = {
+        // 바이오 (DB sector: BIO)
         bio: [
-            { label: "셀트리온", code: "CELLTRION", price: 58000 },
-            { label: "한미약품", code: "HANMI", price: 300000 },
-            { label: "유한양행", code: "YUHAN", price: 70000 },
-            { label: "삼성바이오로직스", code: "SAMSUNG_BIO", price: 800000 },
+            { label: "유한양행", code: "000100", price: 37000 },
+            { label: "셀트리온", code: "068270", price: 58000 },
+            { label: "한미약품", code: "128940", price: 300000 },
+            { label: "삼성바이오로직스", code: "207940", price: 800000 },
         ],
+        // IT/테크 (DB sector: IT_TECH)
         it: [
-            { label: "네이버", code: "NAVER", price: 210000 },
-            { label: "카카오", code: "KAKAO", price: 52000 },
-            { label: "삼성전자", code: "SAMSUNG_ELEC", price: 71000 },
-            { label: "SK하이닉스", code: "SK_HYNIX", price: 145000 },
+            { label: "삼성전자", code: "005930", price: 55000 },
+            { label: "삼성SDS", code: "018260", price: 150000 },
+            { label: "LG CNS", code: "064400", price: 70000 },
+            { label: "LG전자", code: "066570", price: 60000 },
+            { label: "NAVER", code: "035420", price: 170000 },
         ],
+        // 유통 (DB sector: RETAIL)
         distribution: [
-            { label: "신세계", code: "SHINSEGAE", price: 170000 },
-            { label: "이마트", code: "EMART", price: 62000 },
-            { label: "롯데쇼핑", code: "LOTTE_SHOP", price: 78000 },
-            { label: "신세계푸드", code: "SHINSEGAE_FOOD", price: 45000 },
+            { label: "신세계", code: "004170", price: 200000 },
+            { label: "GS리테일", code: "007070", price: 30000 },
+            { label: "롯데쇼핑", code: "023530", price: 100000 },
+            { label: "이마트", code: "139480", price: 100000 },
         ],
+        // 여행 (DB sector: TRAVEL)
         travel: [
-            { label: "대한항공", code: "KOREAN_AIR", price: 24000 },
-            { label: "아시아나", code: "ASIANA", price: 11000 },
-            { label: "하나투어", code: "HANA_TOUR", price: 52000 },
-            { label: "모두투어", code: "MODE_TOUR", price: 18000 },
+            { label: "대한항공", code: "003490", price: 25000 },
+            { label: "호텔신라", code: "008770", price: 80000 },
+            { label: "하나투어", code: "039130", price: 50000 },
+            { label: "모두투어", code: "080160", price: 20000 },
         ],
+        // 외식/프랜차이즈 (DB sector: FOOD_FRANCHISE)
         franchise: [
-            { label: "신세계푸드", code: "SHINSEGAE_FOOD", price: 45000 },
-            { label: "CJ푸드빌", code: "CJ_FOODBILL", price: 26000 },
-            { label: "SPC삼립", code: "SPC_SAM", price: 62000 },
-            { label: "농심", code: "NONGSHIM", price: 380000 },
+            { label: "SPC삼립", code: "005610", price: 60000 },
+            { label: "신세계푸드", code: "031440", price: 45000 },
         ],
+        // 문화/엔터테인먼트 (DB sector: CULTURE_ENTERTAINMENT)
         entertainment: [
-            { label: "CGV", code: "CGV", price: 60000 },
-            { label: "SM", code: "SM", price: 110000 },
-            { label: "JYP", code: "JYP", price: 85000 },
-            { label: "하이브", code: "HYBE", price: 230000 },
+            { label: "에스엠", code: "041510", price: 80000 },
+            { label: "CJ CGV", code: "079160", price: 30000 },
         ],
     };
 
@@ -210,8 +214,9 @@ const Trade = () => {
         currentStocks.find((s) => s.code === tradeOrder.stockCode) ?? currentStocks[0];
 
     const selectedLabel = selectedStock?.label ?? tradeOrder.stockCode;
-    const selectedPrice = selectedStock?.price ?? 0;
-    const totalPrice = (Number(tradeOrder.quantity) || 0) * (Number(selectedPrice) || 0);
+    // 기존: const selectedPrice = selectedStock?.price ?? 0;
+    // 변경: API에서 가져온 실시간 주가 사용, 없으면 하드코딩 가격으로 fallback
+    const selectedPrice = stockPrices[selectedStock?.code] ?? selectedStock?.price ?? 0; const totalPrice = (Number(tradeOrder.quantity) || 0) * (Number(selectedPrice) || 0);
 
     //  4) 카테고리 클릭 핸들러 추가 (아무 함수들 있는 곳에 추가)
     const handlePickCategory = (catKey) => {
@@ -227,6 +232,25 @@ const Trade = () => {
             ...prev,
             stockCode: list[0].code,
         }));
+    };
+
+    // 현재 시뮬레이션 날짜 기준 전체 종목 주가 조회
+    // GET /stocks/price-range?date=yyyy-MM-dd
+    const fetchStockPrices = async (date) => {
+        if (!date) return;
+        try {
+            const res = await api.get(`/stocks/price-range?date=${date}`);
+            if (isSuccess(res.data) && Array.isArray(res.data.data)) {
+                // stockCode를 key로, closePrice를 value로 매핑
+                const priceMap = {};
+                res.data.data.forEach((stock) => {
+                    priceMap[stock.stockCode] = stock.prices?.[0]?.closePrice ?? 0;
+                });
+                setStockPrices(priceMap);
+            }
+        } catch (e) {
+            console.error("주가 조회 실패:", e);
+        }
     };
 
     const isSuccess = (data) => {
@@ -1275,9 +1299,9 @@ const Trade = () => {
                             <hr className="border-gray-300 mb-8" />
 
                             <div className="flex gap-4 space-x-6">
-                               
+
                                 <button
-                                    onClick={() => { setIsProfileModalOpen(false);}}
+                                    onClick={() => { setIsProfileModalOpen(false); }}
                                     className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
                                 >
                                     <img src={logout} alt="logout" className='w-13' />
