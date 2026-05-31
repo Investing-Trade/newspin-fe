@@ -255,10 +255,21 @@ const Trade = () => {
         try {
             const res = await api.get(`/stocks/price-range?date=${date}`);
             if (isSuccess(res.data) && Array.isArray(res.data.data)) {
-                // stockCode를 key로, closePrice를 value로 매핑
                 const priceMap = {};
                 res.data.data.forEach((stock) => {
-                    priceMap[stock.stockCode] = stock.prices?.[0]?.closePrice ?? 0;
+                    const prices = stock.prices ?? [];
+
+                    // ✅ 현재 시뮬레이션 날짜와 정확히 일치하는 가격 사용
+                    const exactMatch = prices.find(p => p.date === date);
+                    if (exactMatch) {
+                        priceMap[stock.stockCode] = exactMatch.closePrice;
+                    } else {
+                        // 일치하는 날짜 없으면 날짜 오름차순에서 가장 마지막(최근) 값
+                        const sorted = prices
+                            .slice()
+                            .sort((a, b) => new Date(b.date) - new Date(a.date));
+                        priceMap[stock.stockCode] = sorted[0]?.closePrice ?? 0;
+                    }
                 });
                 setStockPrices(priceMap);
             }
@@ -274,14 +285,13 @@ const Trade = () => {
         try {
             const res = await api.get(`/stocks/price-range?date=${date}`);
             if (isSuccess(res.data) && Array.isArray(res.data.data)) {
-                // 선택된 종목만 필터링
                 const targetStock = res.data.data.find(s => s.stockCode === stockCode);
                 if (targetStock && Array.isArray(targetStock.prices)) {
-                    // 날짜순 정렬 후 차트 데이터 형식으로 변환
                     const history = targetStock.prices
+                        .slice()
                         .sort((a, b) => new Date(a.date) - new Date(b.date))
                         .map(p => ({
-                            date: p.date?.slice(5), // MM-DD 형식으로 표시
+                            date: p.date?.slice(5),
                             price: Math.round(p.closePrice ?? 0),
                         }));
                     setPriceHistory(history);
