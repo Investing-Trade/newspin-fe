@@ -97,60 +97,57 @@ const Portfolio = () => {
             title: '바이오',
             icon: bio,
             items: [
-                { name: '셀트리온', code: 'CELLTRION' },
-                { name: '한미약품', code: 'HANMI' },
-                { name: '유한양행', code: 'YUHAN' },
-                { name: '삼성바이오로직스', code: 'SAMSUNG_BIO' },
+                { name: '유한양행', code: '000100' },      // DB stock_code로 변경
+                { name: '셀트리온', code: '068270' },
+                { name: '한미약품', code: '128940' },
+                { name: '삼성바이오로직스', code: '207940' },
             ],
         },
         it: {
             title: 'IT/테크',
             icon: it,
             items: [
-                { name: '네이버', code: 'NAVER' },
-                { name: '카카오', code: 'KAKAO' },
-                { name: '삼성전자', code: 'SAMSUNG_ELEC' },
-                { name: 'SK하이닉스', code: 'SK_HYNIX' },
+                { name: '삼성전자', code: '005930' },      // DB stock_code로 변경
+                { name: '삼성SDS', code: '018260' },
+                { name: 'LG CNS', code: '064400' },
+                { name: 'LG전자', code: '066570' },
+                { name: 'NAVER', code: '035420' },
             ],
         },
         distribution: {
             title: '유통',
             icon: distribution,
             items: [
-                { name: '신세계', code: 'SHINSEGAE' },
-                { name: '이마트', code: 'EMART' },
-                { name: '롯데쇼핑', code: 'LOTTE_SHOP' },
-                { name: '신세계푸드', code: 'SHINSEGAE_FOOD' },
+                { name: '신세계', code: '004170' },        // DB stock_code로 변경
+                { name: 'GS리테일', code: '007070' },
+                { name: '롯데쇼핑', code: '023530' },
+                { name: '이마트', code: '139480' },
             ],
         },
         travel: {
             title: '여행',
             icon: plane,
             items: [
-                { name: '대한항공', code: 'KOREAN_AIR' },
-                { name: '아시아나', code: 'ASIANA' },
-                { name: '하나투어', code: 'HANA_TOUR' },
-                { name: '모두투어', code: 'MODE_TOUR' },
+                { name: '대한항공', code: '003490' },      // DB stock_code로 변경
+                { name: '호텔신라', code: '008770' },
+                { name: '하나투어', code: '039130' },
+                { name: '모두투어', code: '080160' },
             ],
         },
         franchise: {
             title: '외식/프랜차이즈',
             icon: cutlery,
             items: [
-                { name: '신세계푸드', code: 'SHINSEGAE_FOOD' },
-                { name: 'CJ푸드빌', code: 'CJ_FOODBILL' },
-                { name: 'SPC삼립', code: 'SPC_SAM' },
-                { name: '농심', code: 'NONGSHIM' },
+                { name: 'SPC삼립', code: '005610' },       // DB stock_code로 변경
+                { name: '신세계푸드', code: '031440' },
             ],
         },
         entertainment: {
             title: '문화/엔터테인먼트',
             icon: enter,
             items: [
-                { name: 'CGV', code: 'CGV' },
-                { name: 'SM', code: 'SM' },
-                { name: 'JYP', code: 'JYP' },
-                { name: '하이브', code: 'HYBE' },
+                { name: '에스엠', code: '041510' },        // DB stock_code로 변경
+                { name: 'CJ CGV', code: '079160' },
             ],
         },
     }), []);
@@ -361,7 +358,7 @@ const Portfolio = () => {
         await fetchPortfolio(sid);
         await fetchTrades(sid);
     };
-   
+
     // ===== 섹션(보유종목) 데이터 구성: API 응답 형태가 달라도 최대한 맞춰서 표시 =====
     const holdingsMap = useMemo(() => {
         const rawItems = Array.isArray(portfolio?.items) ? portfolio.items : [];
@@ -705,7 +702,7 @@ const Portfolio = () => {
                                 <label className="block mb-2">이메일</label>
                                 <input
                                     type="email"
-                                    value={ userInfo.email}
+                                    value={userInfo.email}
                                     readOnly
                                     className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold `}
                                 />
