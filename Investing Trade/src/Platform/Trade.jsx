@@ -114,47 +114,40 @@ const Trade = () => {
 
     // STOCKS를 카테고리별로 분리 (기존 STOCKS 교체)
     const STOCK_CATEGORIES = {
-        // 바이오 (DB sector: BIO)
         bio: [
-            { label: "유한양행", code: "000100", price: 37000 },
-            { label: "셀트리온", code: "068270", price: 58000 },
-            { label: "한미약품", code: "128940", price: 300000 },
-            { label: "삼성바이오로직스", code: "207940", price: 800000 },
+            { label: "유한양행", code: "000100", stockId: 1, price: 37000 },
+            { label: "셀트리온", code: "068270", stockId: 16, price: 58000 },
+            { label: "한미약품", code: "128940", stockId: 19, price: 300000 },
+            { label: "삼성바이오로직스", code: "207940", stockId: 21, price: 800000 },
         ],
-        // IT/테크 (DB sector: IT_TECH)
         it: [
-            { label: "삼성전자", code: "005930", price: 55000 },
-            { label: "삼성SDS", code: "018260", price: 150000 },
-            { label: "LG CNS", code: "064400", price: 70000 },
-            { label: "LG전자", code: "066570", price: 60000 },
-            { label: "NAVER", code: "035420", price: 170000 },
+            { label: "삼성전자", code: "005930", stockId: 5, price: 55000 },
+            { label: "삼성SDS", code: "018260", stockId: 8, price: 150000 },
+            { label: "LG CNS", code: "064400", stockId: 14, price: 70000 },
+            { label: "LG전자", code: "066570", stockId: 15, price: 60000 },
+            { label: "NAVER", code: "035420", stockId: 11, price: 170000 },
         ],
-        // 유통 (DB sector: RETAIL)
         distribution: [
-            { label: "신세계", code: "004170", price: 200000 },
-            { label: "GS리테일", code: "007070", price: 30000 },
-            { label: "롯데쇼핑", code: "023530", price: 100000 },
-            { label: "이마트", code: "139480", price: 100000 },
+            { label: "신세계", code: "004170", stockId: 3, price: 200000 },
+            { label: "GS리테일", code: "007070", stockId: 6, price: 30000 },
+            { label: "롯데쇼핑", code: "023530", stockId: 9, price: 100000 },
+            { label: "이마트", code: "139480", stockId: 20, price: 100000 },
         ],
-        // 여행 (DB sector: TRAVEL)
         travel: [
-            { label: "대한항공", code: "003490", price: 25000 },
-            { label: "호텔신라", code: "008770", price: 80000 },
-            { label: "하나투어", code: "039130", price: 50000 },
-            { label: "모두투어", code: "080160", price: 20000 },
+            { label: "대한항공", code: "003490", stockId: 2, price: 25000 },
+            { label: "호텔신라", code: "008770", stockId: 7, price: 80000 },
+            { label: "하나투어", code: "039130", stockId: 12, price: 50000 },
+            { label: "모두투어", code: "080160", stockId: 18, price: 20000 },
         ],
-        // 외식/프랜차이즈 (DB sector: FOOD_FRANCHISE)
         franchise: [
-            { label: "SPC삼립", code: "005610", price: 60000 },
-            { label: "신세계푸드", code: "031440", price: 45000 },
+            { label: "SPC삼립", code: "005610", stockId: 4, price: 60000 },
+            { label: "신세계푸드", code: "031440", stockId: 10, price: 45000 },
         ],
-        // 문화/엔터테인먼트 (DB sector: CULTURE_ENTERTAINMENT)
         entertainment: [
-            { label: "에스엠", code: "041510", price: 80000 },
-            { label: "CJ CGV", code: "079160", price: 30000 },
+            { label: "에스엠", code: "041510", stockId: 13, price: 80000 },
+            { label: "CJ CGV", code: "079160", stockId: 17, price: 30000 },
         ],
     };
-
     // 세션과 관련된 진행/피드백/결과 상태를 모두 초기화
     const clearAllSessionState = () => {
         localStorage.removeItem("simulationSessionId");
@@ -199,7 +192,7 @@ const Trade = () => {
 
     const currentStocks = STOCK_CATEGORIES[selectedCategory] ?? [];
 
-    //  카테고리 바뀌었는데 현재 stockCode가 그 카테고리에 없으면 첫 종목으로 맞춤
+    // 카테고리 바뀌었는데 현재 stockCode가 그 카테고리에 없으면 첫 종목으로 맞춤
     useEffect(() => {
         if (!currentStocks.length) return;
 
@@ -209,6 +202,19 @@ const Trade = () => {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedCategory]);
+
+    // dayData의 simulationDate가 변경될 때마다 실행
+    // "다음 날짜" 버튼 클릭 또는 세션 복구 시 해당 날짜의 실시간 주가 데이터를 API에서 가져옴
+    useEffect(() => {
+        // simulationDate가 없으면 실행하지 않음 (세션 미시작 상태)
+        if (!dayData?.simulationDate) return;
+
+        // 현재 시뮬레이션 날짜 기준으로 전체 종목 주가 조회
+        // GET /stocks/price-range?date=yyyy-MM-dd
+        fetchStockPrices(dayData.simulationDate);
+
+        // dayData.simulationDate가 바뀔 때만 실행 (불필요한 중복 호출 방지)
+    }, [dayData?.simulationDate]);
 
     const selectedStock =
         currentStocks.find((s) => s.code === tradeOrder.stockCode) ?? currentStocks[0];
@@ -244,7 +250,7 @@ const Trade = () => {
                 // stockCode를 key로, closePrice를 value로 매핑
                 const priceMap = {};
                 res.data.data.forEach((stock) => {
-                    priceMap[stock.stockCode] = stock.prices?.[0]?.closePrice ?? 0;
+                    priceMap[stock.stockCode] = Math.round(stock.prices?.[0]?.closePrice ?? 0);
                 });
                 setStockPrices(priceMap);
             }
@@ -745,10 +751,10 @@ const Trade = () => {
 
         try {
             const response = await api.post(`/simulation/sessions/${session.sessionId}/trades`, {
-                stockCode: tradeOrder.stockCode,
+                stockId: selectedStock?.stockId,
                 tradeType: type,
                 quantity: qty,
-                price: selectedPrice, //  선택 종목 가격
+                price: Math.round(selectedPrice), // 소수점 제거
             });
 
             if (isSuccess(response.data)) {

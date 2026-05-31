@@ -13,7 +13,7 @@ import logout from '../assets/logout.png';
 import correction from '../assets/correction-tape.png';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://52.78.151.56:8080';
+const API_BASE_URL = 'http://localhost:8080';
 
 const privateApi = axios.create({
     baseURL: API_BASE_URL,
