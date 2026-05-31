@@ -1109,7 +1109,6 @@ const Trade = () => {
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="text-xl">📋</span>
                                 <h3 className="font-bold text-lg">뉴스 기사</h3>
-                                <span className="text-sm font-bold ml-auto truncate">코로나19에도 '위기가 곧 기회' 외친 국내 제약사들</span>
                             </div>
                             <div className="border border-gray-400 rounded-lg p-3 flex-1 overflow-y-auto text-xs leading-relaxed font-jua">
                                 {dayData?.todayNews?.length > 0 ? (
