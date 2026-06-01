@@ -468,7 +468,7 @@ const News = () => {
 
                         <div className="border-2 border-black rounded-lg p-1 bg-white flex-1 overflow-y-auto font-jua">
                             <div className="flex items-center gap-1 font-bold text-sm shrink-0">
-                                💡 판단 근거 코멘트
+                                💡 판단 근거 코멘트 - 100자 이상 작성
                             </div>
                             <hr className='mt-1 pb-1' />
                             <textarea
