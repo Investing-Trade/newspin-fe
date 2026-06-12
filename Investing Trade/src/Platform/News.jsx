@@ -234,7 +234,7 @@ const News = () => {
             const response = await api.put(`/simulation/sessions/${sessionId}/complete`);
 
             if (isSuccess(response.data)) {
-                navigate('/invest');
+                navigate('/main');
             } else {
                 alert(response.data?.message || "학습 종료 처리에 실패했습니다.");
             }
@@ -248,7 +248,7 @@ const News = () => {
             if (error.response?.status === 401 || error.response?.status === 403) {
                 alert("인증이 만료되었습니다. 다시 로그인해주세요.");
                 localStorage.clear();
-                navigate('/login');
+                navigate('/main');
             } else {
                 alert(error.response?.data?.message || "학습 종료 중 오류가 발생했습니다.");
             }
