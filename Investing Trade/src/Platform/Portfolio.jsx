@@ -3,9 +3,7 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-
 import logout from '../assets/logout.png';
-import correction from '../assets/correction-tape.png';
 import dashboard from '../assets/dashboard.png';
 import bio from '../assets/bio-gas.png';
 import it from '../assets/it.png';
@@ -20,11 +18,9 @@ import clock from '../assets/clock.png';
 import calendar from '../assets/calendar.png';
 import stocks from '../assets/stock-exchange.png';
 import axios from 'axios';
-import save from '../assets/save.png';
-import { Eye, EyeOff } from 'lucide-react';
 
 const api = axios.create({
-    baseURL: "http://52.78.151.56:8080",
+    baseURL: "http://localhost:8080",
     withCredentials: false,
 });
 
@@ -37,7 +33,7 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// ✅ 서버 응답이 { status: "success", code: "200" } 형태인 것 같아서 그 기준으로 처리
+//  서버 응답이 { status: "success", code: "200" } 형태인 것 같아서 그 기준으로 처리
 const isSuccess = (data) => {
     if (!data) return false;
 
@@ -87,13 +83,9 @@ const Portfolio = () => {
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
     // ===== 내 정보 모달 상태(기존 UI 유지 위해 추가) =====
-    const [isEditing, setIsEditing] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
     const [userInfo, setUserInfo] = useState({ userId: '', email: '', password: '****' });
-    const [editData, setEditData] = useState({ userId: '', email: '', password: '' });
-
+    const [hasActiveSession, setHasActiveSession] = useState(false); // 현재 복구 가능한 ACTIVE 세션이 있는지 여부, 이 값으로 보유 종목/거래 내역/투자 환경 정보를 렌더링할지 결정
     // ===== 시뮬레이션/포트폴리오/거래내역 상태 =====
-    const [sessions, setSessions] = useState([]);
     const [session, setSession] = useState(null);        // 세션 상세/메타
     const [portfolio, setPortfolio] = useState(null);    // 잔고 + 보유종목(가능하면)
     const [dayData, setDayData] = useState(null);        // 현재 날짜(가능하면)
@@ -105,60 +97,57 @@ const Portfolio = () => {
             title: '바이오',
             icon: bio,
             items: [
-                { name: '셀트리온', code: 'CELLTRION' },
-                { name: '한미약품', code: 'HANMI' },
-                { name: '유한양행', code: 'YUHAN' },
-                { name: '삼성바이오로직스', code: 'SAMSUNG_BIO' },
+                { name: '유한양행', code: '000100' },      // DB stock_code로 변경
+                { name: '셀트리온', code: '068270' },
+                { name: '한미약품', code: '128940' },
+                { name: '삼성바이오로직스', code: '207940' },
             ],
         },
         it: {
             title: 'IT/테크',
             icon: it,
             items: [
-                { name: '네이버', code: 'NAVER' },
-                { name: '카카오', code: 'KAKAO' },
-                { name: '삼성전자', code: 'SAMSUNG_ELEC' },
-                { name: 'SK하이닉스', code: 'SK_HYNIX' },
+                { name: '삼성전자', code: '005930' },      // DB stock_code로 변경
+                { name: '삼성SDS', code: '018260' },
+                { name: 'LG CNS', code: '064400' },
+                { name: 'LG전자', code: '066570' },
+                { name: 'NAVER', code: '035420' },
             ],
         },
         distribution: {
             title: '유통',
             icon: distribution,
             items: [
-                { name: '신세계', code: 'SHINSEGAE' },
-                { name: '이마트', code: 'EMART' },
-                { name: '롯데쇼핑', code: 'LOTTE_SHOP' },
-                { name: '신세계푸드', code: 'SHINSEGAE_FOOD' },
+                { name: '신세계', code: '004170' },        // DB stock_code로 변경
+                { name: 'GS리테일', code: '007070' },
+                { name: '롯데쇼핑', code: '023530' },
+                { name: '이마트', code: '139480' },
             ],
         },
         travel: {
             title: '여행',
             icon: plane,
             items: [
-                { name: '대한항공', code: 'KOREAN_AIR' },
-                { name: '아시아나', code: 'ASIANA' },
-                { name: '하나투어', code: 'HANA_TOUR' },
-                { name: '모두투어', code: 'MODE_TOUR' },
+                { name: '대한항공', code: '003490' },      // DB stock_code로 변경
+                { name: '호텔신라', code: '008770' },
+                { name: '하나투어', code: '039130' },
+                { name: '모두투어', code: '080160' },
             ],
         },
         franchise: {
             title: '외식/프랜차이즈',
             icon: cutlery,
             items: [
-                { name: '신세계푸드', code: 'SHINSEGAE_FOOD' },
-                { name: 'CJ푸드빌', code: 'CJ_FOODBILL' },
-                { name: 'SPC삼립', code: 'SPC_SAM' },
-                { name: '농심', code: 'NONGSHIM' },
+                { name: 'SPC삼립', code: '005610' },       // DB stock_code로 변경
+                { name: '신세계푸드', code: '031440' },
             ],
         },
         entertainment: {
             title: '문화/엔터테인먼트',
             icon: enter,
             items: [
-                { name: 'CGV', code: 'CGV' },
-                { name: 'SM', code: 'SM' },
-                { name: 'JYP', code: 'JYP' },
-                { name: '하이브', code: 'HYBE' },
+                { name: '에스엠', code: '041510' },        // DB stock_code로 변경
+                { name: 'CJ CGV', code: '079160' },
             ],
         },
     }), []);
@@ -181,18 +170,15 @@ const Portfolio = () => {
         return n.toLocaleString('ko-KR');
     };
 
+    const safeNum = (value, fallback = 0) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : fallback;
+    };
+
     const codeToName = useMemo(() => {
         const map = {};
         Object.values(STOCK_META).forEach(sec => {
             sec.items.forEach(i => { map[i.code] = i.name; });
-        });
-        return map;
-    }, [STOCK_META]);
-
-    const nameToCode = useMemo(() => {
-        const map = {};
-        Object.values(STOCK_META).forEach(sec => {
-            sec.items.forEach(i => { map[i.name] = i.code; });
         });
         return map;
     }, [STOCK_META]);
@@ -202,7 +188,13 @@ const Portfolio = () => {
         try {
             const res = await api.get('/user/me');
             if (isSuccess(res.data)) {
-                setUserInfo(res.data.data ?? { userId: '', email: '', password: '****' });
+                const savedPwd = localStorage.getItem("userPwd") || "****";
+                const info = {
+                    ...(res.data.data ?? { userId: '', email: '' }),
+                    password: savedPwd,
+                };
+
+                setUserInfo(info);
             }
         } catch (e) {
             console.error("fetchUserInfo error:", e);
@@ -213,7 +205,6 @@ const Portfolio = () => {
         try {
             const res = await api.get('/simulation/sessions');
             if (isSuccess(res.data) && Array.isArray(res.data.data)) {
-                setSessions(res.data.data);
                 return res.data.data;
             }
         } catch (e) {
@@ -253,135 +244,154 @@ const Portfolio = () => {
 
     const fetchPortfolio = async (sid) => {
         if (!sid) return null;
+
         try {
             const res = await api.get(`/simulation/sessions/${sid}/portfolio`);
+
             if (isSuccess(res.data)) {
+                console.log("portfolio response data:", res.data.data);
                 setPortfolio(res.data.data);
                 return res.data.data;
             }
+
+            console.error("fetchPortfolio fail response:", res.data);
         } catch (e) {
-            console.error("fetchPortfolio error:", e);
+            console.error("fetchPortfolio error detail:", {
+                sid,
+                url: e.config?.url,
+                method: e.config?.method,
+                status: e.response?.status,
+                responseData: e.response?.data,
+            });
         }
+
         setPortfolio(null);
         return null;
     };
 
+    const handleLogout = () => {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("simulationSessionId");
+        navigate('/login');
+    };
+
+    // Portfolio 화면에서 진행 중 세션 관련 표시 데이터를 모두 초기화, 세션 완료/삭제 후에는 사용자에게 이전 투자 정보가 보이지 않도록 처리
+    // 진행 중 세션이 없을 때 투자 환경 관련 숫자 정보를 비우는 초기화 함수
+    const clearCurrentProgress = () => {
+        localStorage.removeItem("simulationSessionId");
+
+        // ACTIVE 세션 없음 처리
+        setHasActiveSession(false);
+
+        // 세션/포트폴리오/거래 상태 초기화
+        setSession(null);
+        setDayData(null);
+        setPortfolio(null);
+        setTrades([]);
+    };
+
     const fetchTrades = async (sid) => {
         if (!sid) return [];
+
         try {
             const res = await api.get(`/simulation/sessions/${sid}/trades`);
+
             if (isSuccess(res.data)) {
                 const list = Array.isArray(res.data.data) ? res.data.data : [];
                 setTrades(list);
                 return list;
             }
+
+            console.error("fetchTrades fail response:", res.data);
         } catch (e) {
-            console.error("fetchTrades error:", e);
+            console.error("fetchTrades error detail:", {
+                sid,
+                url: e.config?.url,
+                method: e.config?.method,
+                status: e.response?.status,
+                responseData: e.response?.data,
+            });
         }
+
         setTrades([]);
         return [];
     };
 
     const pickSessionIdToRestore = (list) => {
+        const activeList = Array.isArray(list)
+            ? list.filter(s => String(s.status).toUpperCase() === "ACTIVE")
+            : [];
+
         const savedSid = localStorage.getItem("simulationSessionId");
-        if (savedSid && list.some(s => String(s.sessionId) === String(savedSid))) return Number(savedSid);
+        if (savedSid && activeList.some(s => String(s.sessionId) === String(savedSid))) {
+            return Number(savedSid);
+        }
 
-        const active = list.find(s => String(s.status).toUpperCase() === "ACTIVE");
-        if (active?.sessionId) return Number(active.sessionId);
+        if (activeList.length === 0) return null;
 
-        const sorted = [...list].sort((a, b) => {
+        const sortedActive = [...activeList].sort((a, b) => {
             const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
             if (ad !== bd) return bd - ad;
             return (Number(b.sessionId) || 0) - (Number(a.sessionId) || 0);
         });
-        return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
+
+        return Number(sortedActive[0].sessionId);
     };
 
+    // ACTIVE 세션이 존재할 때 Portfolio 화면에 진행 데이터를 복구
+    // ACTIVE 세션이 있을 때만 투자 환경 숫자 정보를 복구
     const restoreSession = async (sid, listForMeta = null) => {
         if (!sid) return;
+
+        // ACTIVE 세션 존재 표시
+        setHasActiveSession(true);
+
         localStorage.setItem("simulationSessionId", String(sid));
 
-        // 목록 기반 세션 메타 먼저 세팅(없으면 최소값)
         const meta = listForMeta?.find(s => Number(s.sessionId) === Number(sid));
         if (meta) setSession(meta);
         else setSession({ sessionId: sid });
 
-        await Promise.all([
-            fetchSessionDetail(sid),
-            fetchDayData(sid),
-            fetchPortfolio(sid),
-            fetchTrades(sid),
-        ]);
+        await fetchSessionDetail(sid);
+        await fetchDayData(sid);
+        await fetchPortfolio(sid);
+        await fetchTrades(sid);
     };
 
-    // ===== 내 정보 수정 저장(현재 서버 API가 명확하지 않아서 UI만 유지) =====
-    const handleUpdateInfo = async () => {
-        const updatePayload = {
-            ...editData,
-            password: editData.password || userInfo.password
-        };
-
-        try {
-            // api는 Portfolio.jsx 상단에 정의된 axios 인스턴스
-            const response = await api.patch('/user/me', updatePayload);
-
-            if (response.data.status.toLowerCase() === "success") {
-                alert("내 정보가 성공적으로 수정되었습니다.");
-                setUserInfo(updatePayload);
-                if (editData.password) {
-                    localStorage.setItem('userPwd', editData.password);
-                }
-                setIsEditing(false);
-                setShowPassword(false);
-            }
-        } catch (error) {
-            alert(error.response?.data?.message || "수정 중 오류가 발생했습니다.");
-        }
-    };
     // ===== 섹션(보유종목) 데이터 구성: API 응답 형태가 달라도 최대한 맞춰서 표시 =====
     const holdingsMap = useMemo(() => {
-        // 가능한 케이스들을 넓게 수용
-        const rawHoldings =
-            portfolio?.holdings ??
-            portfolio?.positions ??
-            portfolio?.stocks ??
-            portfolio?.items ??
-            [];
+        const rawItems = Array.isArray(portfolio?.items) ? portfolio.items : [];
 
-        const arr = Array.isArray(rawHoldings) ? rawHoldings : [];
-
-        // key: stockCode
         const map = {};
-        arr.forEach((h) => {
-            const code = h?.stockCode ?? h?.code ?? nameToCode[h?.name] ?? null;
+        rawItems.forEach((item) => {
+            const code = item?.stockCode;
             if (!code) return;
 
-            const qty = safeNum(h?.quantity ?? h?.qty ?? h?.count, 0);
-            const cur = safeNum(h?.currentPrice ?? h?.current ?? h?.price ?? h?.marketPrice, 0);
+            const quantity = safeNum(item?.quantity, 0);
+            const averagePrice = safeNum(item?.averagePrice, 0);
+            const currentPrice = safeNum(item?.currentPrice, 0);
 
-            // 수익(실현/평가) 필드가 없으면 0으로
-            const profit =
-                h?.realizedProfit ??
-                h?.realizedPnl ??
-                h?.pnl ??
-                h?.profit ??
-                0;
+            // 현재 응답에 실현손익 필드는 없으므로 보유 평가손익으로 계산
+            const profit = (currentPrice - averagePrice) * quantity;
 
             map[code] = {
-                quantity: qty,
-                currentPrice: cur,
-                profit: safeNum(profit, 0),
+                quantity,
+                currentPrice,
+                profit,
+                stockName: item?.stockName ?? codeToName[code] ?? code,
             };
         });
 
         return map;
-    }, [portfolio, nameToCode]);
+    }, [portfolio, codeToName]);
 
     const sections = useMemo(() => {
         const keys = ["bio", "it", "distribution", "travel", "franchise", "entertainment"];
+
         return keys.map((k) => {
             const sec = STOCK_META[k];
+
             return {
                 title: sec.title,
                 icon: sec.icon,
@@ -395,7 +405,7 @@ const Portfolio = () => {
                         p === 0 ? "0" : (p > 0 ? `+${formatMoney(p)}` : `-${formatMoney(Math.abs(p))}`);
 
                     return {
-                        name: it.name,
+                        name: h?.stockName ?? it.name,
                         count: qty ? `${qty}주` : '-',
                         current: cur ? formatMoney(cur) : '-',
                         profit: profitText,
@@ -407,71 +417,89 @@ const Portfolio = () => {
 
     const tradeRows = useMemo(() => {
         const arr = Array.isArray(trades) ? [...trades] : [];
-        // 최신순 정렬(가능한 필드들)
+
         arr.sort((a, b) => {
-            const at = new Date(a?.tradeDate ?? a?.createdAt ?? a?.date ?? 0).getTime() || 0;
-            const bt = new Date(b?.tradeDate ?? b?.createdAt ?? b?.date ?? 0).getTime() || 0;
+            const at = new Date(a?.tradeDate ?? a?.createdAt ?? 0).getTime() || 0;
+            const bt = new Date(b?.tradeDate ?? b?.createdAt ?? 0).getTime() || 0;
             return bt - at;
         });
+
         return arr.slice(0, 30).map((t) => {
-            const code = t?.stockCode ?? t?.code ?? null;
-            const name = t?.stockName ?? t?.name ?? (code ? (codeToName[code] ?? code) : '-');
+            const code = t?.stockCode ?? null;
+            const name = t?.stockName ?? (code ? (codeToName[code] ?? code) : '-');
 
-            const qty = safeNum(t?.quantity ?? t?.qty, 0);
-            const price = safeNum(t?.price ?? t?.tradePrice ?? t?.amount, 0);
-
-            // 수익 필드가 없으면 '-' 처리
-            const profitVal =
-                t?.profit ??
-                t?.realizedProfit ??
-                t?.realizedPnl ??
-                t?.pnl;
-
-            const profitText =
-                typeof profitVal === "number"
-                    ? (profitVal >= 0 ? `+${formatMoney(profitVal)}` : `-${formatMoney(Math.abs(profitVal))}`)
-                    : (profitVal != null ? String(profitVal) : '-');
-
-            const dateStr = (t?.tradeDate ?? t?.createdAt ?? t?.date ?? '').toString().slice(0, 10) || '-';
+            const qty = safeNum(t?.quantity, 0);
+            const totalAmount = safeNum(t?.totalAmount, 0);
+            const dateStr = (t?.tradeDate ?? t?.createdAt ?? '').toString().slice(0, 10) || '-';
 
             return {
                 name,
-                amount: price ? formatMoney(price) : '-',
+                amount: totalAmount ? formatMoney(totalAmount) : '-',
                 qty: qty || '-',
-                profitText,
-                profitUp: typeof profitVal === "number" ? profitVal >= 0 : String(profitText).includes('+'),
+                profitText: '-',   // 현재 거래 조회 응답에는 수익 필드 없음
+                profitUp: false,
                 dateStr,
             };
         });
     }, [trades, codeToName]);
 
-    // ===== 투자 환경 표시값(세션/포트폴리오/일자) =====
-    const startDate = session?.startDate ?? session?.period?.startDate ?? '-';
-    const endDate = session?.endDate ?? session?.period?.endDate ?? '-';
-    const initialCapital = session?.initialCapital ?? session?.config?.initialCapital ?? 0;
-    const currentCapital = portfolio?.currentCapital ?? portfolio?.cash ?? portfolio?.balance ?? 0;
-    const currentDate = dayData?.simulationDate ?? session?.simulationDate ?? session?.currentDate ?? '-';
-    const remain = dday(endDate, currentDate);
+    // ===== 투자 환경 표시값(세션/포트폴리오/일자) ===== 
+    // ACTIVE 세션이 있을 때만 투자 환경 숫자 정보를 계산, 세션이 없으면 화면에는 빈 값('')만 표시되도록 처리
+    const startDate = hasActiveSession
+        ? (session?.startDate ?? session?.period?.startDate ?? '')
+        : '';
+
+    const endDate = hasActiveSession
+        ? (session?.endDate ?? session?.period?.endDate ?? '')
+        : '';
+
+    const initialCapital = hasActiveSession
+        ? (session?.initialCapital ?? session?.config?.initialCapital ?? '')
+        : '';
+
+    const currentCapital = hasActiveSession
+        ? (portfolio?.currentCapital ?? portfolio?.cash ?? portfolio?.balance ?? '')
+        : '';
+
+    const currentDate = hasActiveSession
+        ? (dayData?.simulationDate ?? session?.simulationDate ?? session?.currentDate ?? '')
+        : '';
+
+    const remain = hasActiveSession && endDate && currentDate
+        ? dday(endDate, currentDate)
+        : null;
 
     useEffect(() => {
+        // 페이지 제목
         document.title = "NewsPin - Portfolio";
-    }, []);
 
-    useEffect(() => {
-        (async () => {
+        const initPortfolioPage = async () => {
             const token = getAccessToken();
-            if (!token) return navigate("/login");
+            if (!token) {
+                navigate("/login");
+                return;
+            }
 
+            // 사용자 정보 먼저 복구
             await fetchUserInfo();
 
+            // 서버에서 현재 세션 목록 조회
             const list = await fetchSessions();
-            if (list.length === 0) return;
 
-            const sid = pickSessionIdToRestore(list);
-            if (sid) await restoreSession(sid, list);
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+            // ACTIVE 세션만 복구 대상으로 선택
+            const sidToRestore = pickSessionIdToRestore(list);
+
+            // ACTIVE 세션이 있으면 진행 정보 복구
+            if (sidToRestore) {
+                await restoreSession(sidToRestore, list);
+            } else {
+                // ACTIVE 세션이 없으면 이전 투자 정보가 남지 않도록 전체 초기화
+                clearCurrentProgress();
+            }
+        };
+
+        initPortfolioPage();
+    }, [navigate]);
 
     return (
         <div className="w-full h-screen bg-blue-700 flex flex-col items-center md:p-2 font-agbalumo overflow-hidden">
@@ -490,8 +518,7 @@ const Portfolio = () => {
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button onClick={() => setIsProfileModalOpen(true)} className="hover:underline font-jua cursor-pointer">내 정보</button>
                     <span className='font-bold mb-2'>|</span>
-                    <button onClick={() => navigate('/login')} className="hover:underline font-jua cursor-pointer">로그아웃</button>
-                </div>
+                    <button onClick={handleLogout} className="hover:underline font-jua cursor-pointer">로그아웃</button>                </div>
             </div>
 
             {/* [메인 컨텐츠 영역] */}
@@ -565,7 +592,7 @@ const Portfolio = () => {
                                             <th>종목명</th>
                                             <th>거래대금</th>
                                             <th>거래량</th>
-                                            <th>수익</th>
+                                            <th>손익</th>
                                             <th>날짜</th>
                                         </tr>
                                     </thead>
@@ -599,15 +626,18 @@ const Portfolio = () => {
                                 </h3>
                                 <div className="grid grid-cols-2 gap-x-8">
                                     <div className="space-y-2 ml-2 mt-3">
+                                        {/*  항목명은 유지하고, ACTIVE 세션이 없으면 값만 빈칸으로 표시 */}
                                         <p className="text-[15px] text-black">시작 날짜 : {startDate}</p>
                                         <p className="text-[15px] text-black">종료 날짜 : {endDate}</p>
+
                                         <p className="text-[15px] text-black mt-5">초기 자본 :</p>
                                         <p className="text-md text-gray-500 mt-2 font-bold underline decoration-yellow-400 underline-offset-4">
-                                            {formatMoney(initialCapital)}
+                                            {initialCapital !== '' ? formatMoney(initialCapital) : ''}
                                         </p>
+
                                         <p className="text-md text-black mt-5">현재 잔고 :</p>
                                         <p className="text-lg font-bold text-indigo-600 underline underline-offset-4 decoration-indigo-200">
-                                            {formatMoney(currentCapital)}
+                                            {currentCapital !== '' ? formatMoney(currentCapital) : ''}
                                         </p>
                                     </div>
                                     <div className="text-right space-y-4">
@@ -661,10 +691,9 @@ const Portfolio = () => {
                                 <label className="block mb-2">아이디</label>
                                 <input
                                     type="text"
-                                    value={isEditing ? editData.userId : userInfo.userId}
-                                    onChange={(e) => setEditData({ ...editData, userId: e.target.value })}
-                                    readOnly={!isEditing}
-                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                    value={userInfo.userId}
+                                    readOnly
+                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold`}
                                 />
                             </div>
 
@@ -673,38 +702,10 @@ const Portfolio = () => {
                                 <label className="block mb-2">이메일</label>
                                 <input
                                     type="email"
-                                    value={isEditing ? editData.email : userInfo.email}
-                                    onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                                    readOnly={!isEditing}
-                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                    value={userInfo.email}
+                                    readOnly
+                                    className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold `}
                                 />
-                            </div>
-
-                            {/* 비밀번호 필드: lucide icon 토글 적용 */}
-                            <div>
-                                <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
-                                <div className="relative">
-                                    <input
-                                        type={showPassword ? "text" : "password"}
-
-                                        // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
-                                        value={isEditing ? editData.password
-                                            : userInfo.password}
-
-                                        onChange={(e) => setEditData({ ...editData, password: e.target.value })}
-                                        readOnly={!isEditing}
-                                        placeholder={isEditing ? "새 비밀번호 입력" : ""}
-                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
-                                    />
-                                    {/* 수정 중이 아닐 때도 비밀번호를 볼 수 있도록 버튼 상시 활성화 */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
-                                    >
-                                        {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
-                                    </button>
-                                </div>
                             </div>
 
                         </div>
@@ -712,23 +713,12 @@ const Portfolio = () => {
                         <hr className="border-gray-300 mb-8" />
 
                         <div className="flex gap-4 space-x-6">
-                            {isEditing ? (
-                                <button onClick={handleUpdateInfo} className="flex-1 bg-sky-500 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-sky-600">
-                                    <img src={save} alt="save" className='w-12' />
-                                    <span>저장하기</span>
-                                </button>
-                            ) : (
-                                <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
-                                    <img src={correction} alt="correct" className='w-12' />
-                                    <span>수정하기</span>
-                                </button>
-                            )}
                             <button
-                                onClick={() => { setIsProfileModalOpen(false); setIsEditing(false); setShowPassword(false); }}
+                                onClick={() => { setIsProfileModalOpen(false) }}
                                 className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
                             >
                                 <img src={logout} alt="logout" className='w-13' />
-                                <span>메인 페이지로</span>
+                                <span>닫기</span>
                             </button>
                         </div>
                     </div>

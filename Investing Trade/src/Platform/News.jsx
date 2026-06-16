@@ -8,19 +8,19 @@ import dislike from '../assets/dislike.png';
 import submit from '../assets/submit.png';
 import logout from '../assets/logout.png';
 import refresh from '../assets/re.png';
-import correction from '../assets/correction-tape.png';
 import axios from 'axios';
 import exit from '../assets/exit.png';
-import save from '../assets/save.png';
-import { Eye, EyeOff } from 'lucide-react';
+
+let newsPageInitialized = false;
 
 const api = axios.create({
-    baseURL: "http://52.78.151.56:8080",
+    baseURL: "http://localhost:8080",
 });
 
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("accessToken");
+    const token = getAccessToken();
     if (token) {
+        config.headers = config.headers ?? {};
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -28,56 +28,73 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
     (res) => res,
-    (error) => {
-        if (error.response?.status === 401 || error.response?.status === 403) {
-            alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
-            localStorage.clear();
-            window.location.href = "/login";
-        }
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
-const News = () => {
-    const navigate = useNavigate();
-    const API_BASE_URL = 'http://52.78.151.56:8080';
+const getAccessToken = () => {
+    const raw = localStorage.getItem("accessToken");
+    if (!raw) return null;
 
-    const getAuthHeader = () => {
-        const token = localStorage.getItem('accessToken');
-        return token ? { Authorization: `Bearer ${token}` } : {};
+    const normalize = (t) => {
+        if (!t) return null;
+        const s = String(t).trim();
+        return s.toLowerCase().startsWith("bearer ") ? s.slice(7).trim() : s;
     };
 
-    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
+    try {
+        if (raw.startsWith('"') || raw.startsWith("{") || raw.startsWith("[")) {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed === "string") return normalize(parsed);
 
+            return normalize(
+                parsed?.accessToken ??
+                parsed?.access_token ??
+                parsed?.token ??
+                parsed?.data?.accessToken ??
+                parsed?.data?.token
+            );
+        }
+        return normalize(raw);
+    } catch {
+        return normalize(raw);
+    }
+};
+
+const isSuccess = (data) => {
+    if (!data) return false;
+
+    if (typeof data.status === "string" && data.status.toLowerCase() === "success") return true;
+    if (data.code === 200 || data.code === "200") return true;
+    if (data.success === true) return true;
+
+    return false;
+};
+const News = () => {
+    const navigate = useNavigate();
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [newsData, setNewsData] = useState(null);
     const [userComment, setUserComment] = useState("");
     const [selectedSentiment, setSelectedSentiment] = useState(null);
     const [aiResult, setAiResult] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null); // 에러 상태 추가
-
+    const [submittingOpinion, setSubmittingOpinion] = useState(false);
+    const [error, setError] = useState(null);
     const [userInfo, setUserInfo] = useState({ userId: "", email: "", password: "" });
-    const [editData, setEditData] = useState({ userId: "", email: "", password: "" });
 
     // 내 정보 불러오기 (GET /user/me)
     const fetchUserInfo = async () => {
         try {
             const response = await api.get('/user/me');
 
-            if (response.data.status?.toUpperCase() === "SUCCESS") {
-                const { userId, email } = response.data.data;
+            if (isSuccess(response.data)) {
+                const { userId, email } = response.data.data ?? {};
                 const savedPwd = localStorage.getItem("userPwd") || "";
 
-                const fetchedInfo = {
-                    userId,
-                    email,
+                setUserInfo({
+                    userId: userId ?? "",
+                    email: email ?? "",
                     password: savedPwd,
-                };
-
-                setUserInfo(fetchedInfo);
-                setEditData(fetchedInfo);
+                });
             }
         } catch (error) {
             console.error("내 정보 조회 실패:", error);
@@ -90,103 +107,73 @@ const News = () => {
         }
     };
 
-    // 내 정보 수정하기 연동 (PATCH /user/me)
-    const handleUpdateInfo = async () => {
-        const updatePayload = {
-            ...editData,
-            password: editData.password || userInfo.password
-        };
-
-        try {
-            const response = await api.patch('/user/me', updatePayload);
-
-            if (response.data.status?.toUpperCase() === "SUCCESS") {
-                alert("내 정보가 성공적으로 수정되었습니다.");
-                setUserInfo(updatePayload);
-
-                if (editData.password) {
-                    localStorage.setItem("userPwd", editData.password);
-                }
-
-                setIsEditing(false);
-                setShowPassword(false);
-            }
-        } catch (error) {
-            if (error.response?.status === 401 || error.response?.status === 403) {
-                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
-                localStorage.clear();
-                navigate('/login');
-                return;
-            }
-
-            const msg = error.response?.data?.message || "수정 중 오류가 발생했습니다.";
-            alert(msg);
+    const getCurrentSessionId = async () => {
+        const sessions = await fetchSessions();
+        if (!sessions.length) {
+            setError("진행 중인 시뮬레이션 세션이 없습니다.");
+            return null;
         }
+
+        const sessionId = pickSessionIdToUse(sessions);
+        if (!sessionId) {
+            setError("사용할 수 있는 시뮬레이션 세션이 없습니다.");
+            return null;
+        }
+
+        return sessionId;
     };
 
-    // 랜덤 뉴스 불러오기 (GET /news/random)
-    const fetchRandomNews = async () => {
-        const authHeader = getAuthHeader();
-
-        // 토큰이 없으면 요청을 보내지 않고 로그인으로 보냄 (403 원천 차단)
-        if (!authHeader.Authorization) {
-            navigate('/login');
-            return;
-        }
-
+    const loadInitialNews = async () => {
         setLoading(true);
-        try {
-            const response = await api.get('/news/random');
+        setError(null);
 
-            // 서버의 공통 응답 규격(SUCCESS) 확인
-            if (response.data.status?.toUpperCase() === "SUCCESS") {
-                if (response.data.data) {
-                    setNewsData(response.data.data);
-                } else {
-                    // 서버 응답은 성공이나 데이터가 없는 경우
-                    setNewsData(null);
-                    setError("데이터가 존재하지 않습니다.");
-                }
+        try {
+            const loaded = await fetchRandomNews();
+
+            if (!loaded) {
+                setNewsData(null);
                 setAiResult(null);
                 setUserComment("");
                 setSelectedSentiment(null);
+                setError("오늘 표시할 뉴스가 없습니다.");
             }
-        } catch (error) {
-            if (error.response?.status === 403) {
-                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
-                localStorage.clear();
-                navigate('/login');
-            } else {
-                setError("데이터가 존재하지 않습니다."); // 네트워크 에러 등 예외 발생 시
-            }
-            console.error("뉴스 로딩 실패:", error);
         } finally {
             setLoading(false);
         }
     };
 
-    // AI 분석 제출 (POST /news/{newsId}/analyze)
-    const handleSubmitOpinion = async () => {
-        if (!newsData?.newsId) return;
-
-        const authHeader = getAuthHeader();
-        const requestData = {
-            sentiment: selectedSentiment, // POSITIVE, NEGATIVE, NEUTRAL
-            reason: userComment.trim()
-        };
-
+    const fetchSessions = async () => {
         try {
-            const response = await api.post(
-                `/news/${newsData.newsId}/analyze`,
-                requestData
-            );
+            const response = await api.get('/simulation/sessions');
 
-            if (response.data.status?.toUpperCase() === "SUCCESS") {
-                setAiResult(response.data.data);
+            if (isSuccess(response.data) && Array.isArray(response.data.data)) {
+                return response.data.data;
             }
         } catch (error) {
-            console.error("분석 실패:", error);
+            console.error("세션 목록 조회 실패:", error);
         }
+
+        return [];
+    };
+
+    const pickSessionIdToUse = (list) => {
+        const savedSid = localStorage.getItem("simulationSessionId");
+
+        if (savedSid && list.some(s => String(s.sessionId) === String(savedSid))) {
+            return Number(savedSid);
+        }
+
+        const active = list.find(s => String(s.status).toUpperCase() === "ACTIVE");
+        if (active?.sessionId) return Number(active.sessionId);
+
+        const sorted = [...list].sort((a, b) => {
+            const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            if (ad !== bd) return bd - ad;
+            return (Number(b.sessionId) || 0) - (Number(a.sessionId) || 0);
+        });
+
+        return sorted[0]?.sessionId ? Number(sorted[0].sessionId) : null;
     };
 
     const handleLogout = async () => {
@@ -195,21 +182,216 @@ const News = () => {
         } catch (e) {
             console.error("로그아웃 API 호출 실패", e);
         } finally {
+            newsPageInitialized = false;
             localStorage.clear();
             navigate('/login');
         }
     };
 
+    // ✅ "다음 뉴스" 버튼 클릭 시 랜덤 뉴스 새로 조회
+    const handleNextNews = async () => {
+        const token = getAccessToken();
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+
+        try {
+            const loaded = await fetchRandomNews();
+
+            if (!loaded) {
+                setNewsData(null);
+                setAiResult(null);
+                setUserComment("");
+                setSelectedSentiment(null);
+                setError("다음 뉴스가 없습니다.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCompleteLearning = async () => {
+        const token = getAccessToken();
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+
+        try {
+            const sessionId = await getCurrentSessionId();
+
+            // 진행 중인 세션이 없어도 투자 메인으로 이동
+            if (!sessionId) {
+                alert("진행 중인 세션이 없어 투자 화면으로 이동합니다.");
+                navigate('/main');
+                return;
+            }
+
+            const response = await api.put(`/simulation/sessions/${sessionId}/complete`);
+
+            if (isSuccess(response.data)) {
+                navigate('/main');
+            } else {
+                alert(response.data?.message || "학습 종료 처리에 실패했습니다.");
+            }
+        } catch (error) {
+            console.error("complete 호출 실패:", {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/main');
+            } else {
+                alert(error.response?.data?.message || "학습 종료 중 오류가 발생했습니다.");
+            }
+        }
+    }
+
+    // ✅ 랜덤 뉴스 1건 조회 (GET /news/random)
+    // News 페이지에서 표시할 뉴스 데이터를 이 함수로 통일
+    const fetchRandomNews = async () => {
+        try {
+            const response = await api.get('/news/random');
+
+            if (isSuccess(response.data) && response.data?.data) {
+                // ✅ 랜덤 뉴스 1건을 화면 상태에 반영
+                setError(null);
+                setNewsData(response.data.data);
+
+                // ✅ 새 뉴스로 바뀌면 이전 AI 결과 / 사용자 입력 초기화
+                setAiResult(null);
+                setUserComment("");
+                setSelectedSentiment(null);
+
+                return true;
+            }
+        } catch (error) {
+            console.error("random 뉴스 조회 실패:", {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+            }
+        }
+
+        return false;
+    };
+
+    // 1) newsData가 없을 때 조용히 return하지 말고 사용자에게 알려줘야 함
+    // 2) 제출 중 상태를 따로 둬서 중복 클릭을 막아야 함
+    // 3) 401/403이면 다른 API들과 동일하게 로그인 만료 처리 맞춰야 함
+    // 4) 실패 로그에 newsId, status, data를 같이 찍어야 실제 디버깅 가능
+    // AI 분석 제출 (POST /news/{newsId}/analyze)
+    const handleSubmitOpinion = async () => {
+        // 현재 표시 중인 뉴스가 없으면 제출 불가
+        if (!newsData?.newsId) {
+            alert("현재 분석할 뉴스가 없습니다.");
+            return;
+        }
+        // 사용자가 호재(POSITIVE) 또는 악재(NEGATIVE)를 선택했는지 확인
+        if (!selectedSentiment) {
+            alert("호재 또는 악재를 먼저 선택해주세요.");
+            return;
+        }
+        // 판단 근거 코멘트를 입력했는지 확인
+        if (!userComment.trim()) {
+            alert("판단 근거를 입력해주세요.");
+            return;
+        }
+        // 로그인 토큰 확인 (없으면 로그인 페이지 이동)
+
+        const token = getAccessToken();
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+        // 서버로 보낼 요청 데이터 생성
+        // sentiment : 사용자가 선택한 호재/악재
+        // reason : 사용자가 작성한 판단 근거
+        const requestData = {
+            sentiment: selectedSentiment,
+            reason: userComment.trim()
+        };
+
+        try {
+            // 의견 제출 진행 상태로 변경 (버튼 중복 클릭 방지)
+            setSubmittingOpinion(true);
+
+            // 뉴스 분석 API 호출
+            // POST /news/{newsId}/analyze
+            const response = await api.post(
+                `/news/${newsData.newsId}/analyze`,
+                requestData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`, // 인증 토큰
+                        Accept: '*/*',
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            // 서버 응답이 성공이면 AI 분석 결과 화면에 표시
+
+            if (isSuccess(response.data)) {
+                // AI 분석 결과 화면 반영
+                setAiResult(response.data.data);
+            } else {
+                alert(response.data?.message || "분석에 실패했습니다.");
+            }
+        } catch (error) {
+            // API 호출 실패 시 오류 정보 출력
+
+            console.error("분석 실패:", {
+                newsId: newsData?.newsId,
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
+            // 인증 오류 발생 시 로그인 페이지 이동
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert("인증이 만료되었습니다. 다시 로그인해주세요.");
+                localStorage.clear();
+                navigate('/login');
+            } else {
+                alert(error.response?.data?.message || "분석 중 오류가 발생했습니다.");
+            }
+        } finally {
+            // 제출 완료 후 제출 상태 해제
+            setSubmittingOpinion(false);
+        }
+    };
+
     useEffect(() => {
         document.title = "NewsPin - News";
-        const token = localStorage.getItem('accessToken');
+
+        const token = getAccessToken();
         if (!token) {
             navigate('/login');
             return;
         }
 
         fetchUserInfo();
-        fetchRandomNews();
+
+        if (!newsPageInitialized) {
+            newsPageInitialized = true;
+
+            // 초기 진입 시 현재 세션의 daily-data 뉴스만 조회
+            loadInitialNews();
+        }
     }, []);
 
     return (
@@ -228,10 +410,7 @@ const News = () => {
                 <div className="text-white text-lg font-medium flex gap-4 pt-4">
                     <button
                         onClick={() => {
-                            setEditData(userInfo);
                             setIsProfileModalOpen(true);
-                            setIsEditing(false);
-                            setShowPassword(false);
                         }}
                         className="hover:underline font-jua cursor-pointer"
                     >
@@ -289,7 +468,7 @@ const News = () => {
 
                         <div className="border-2 border-black rounded-lg p-1 bg-white flex-1 overflow-y-auto font-jua">
                             <div className="flex items-center gap-1 font-bold text-sm shrink-0">
-                                💡 판단 근거 코멘트
+                                💡 판단 근거 코멘트 - 100자 이상 작성
                             </div>
                             <hr className='mt-1 pb-1' />
                             <textarea
@@ -302,10 +481,17 @@ const News = () => {
                         <div>
                             <button
                                 onClick={handleSubmitOpinion}
-                                className="w-full active:scale-[0.98] transition-all rounded-lg bg-blue-600 text-white p-1 font-bold flex items-center justify-center shadow-md cursor-pointer hover:bg-cyan-400 shrink-0 font-jua"
+                                disabled={submittingOpinion || !newsData?.newsId}
+                                className={`w-full active:scale-[0.98] transition-all rounded-lg text-white p-1 font-bold flex items-center justify-center shadow-md shrink-0 font-jua
+                                    ${submittingOpinion || !newsData?.newsId
+                                        ? 'bg-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 cursor-pointer hover:bg-cyan-400'
+                                    }`}
                             >
                                 <img src={submit} alt="submit" className="w-6 mr-2" />
-                                <p className='font-semibold'>의견 제출</p>
+                                <p className='font-semibold'>
+                                    {submittingOpinion ? '제출 중...' : '의견 제출'}
+                                </p>
                             </button>
                         </div>
                     </div>
@@ -356,14 +542,15 @@ const News = () => {
                         </div>
                         <div className="flex gap-20 mt-1 w-[50%] ml-60 items-center justify-center">
                             <button
-                                onClick={fetchRandomNews}
+                                // 버튼 클릭은 다음 뉴스 조회 의도이므로 true 전달
+                                onClick={handleNextNews}
                                 className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-cyan-500"
                             >
                                 <img src={refresh} alt="refresh" className="w-8" />
                                 <span>다음 뉴스</span>
                             </button>
 
-                            <button onClick={() => navigate('/main')} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
+                            <button onClick={handleCompleteLearning} className="flex-1 flex items-center border-2 border-white justify-center gap-2 bg-red-500 text-white active:scale-[0.98] transition-all rounded-lg font-semibold text-lg shadow-lg cursor-pointer hover:bg-rose-600">
                                 <img src={exit} alt="exit" className="w-8" />
                                 <span >학습종료</span>
                             </button>
@@ -385,10 +572,9 @@ const News = () => {
                                     <label className="block mb-2">아이디</label>
                                     <input
                                         type="text"
-                                        value={isEditing ? editData.userId : userInfo.userId}
-                                        onChange={(e) => setEditData({ ...editData, userId: e.target.value })}
-                                        readOnly={!isEditing}
-                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                        value={userInfo.userId}
+                                        readOnly
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold`}
                                     />
                                 </div>
 
@@ -397,62 +583,22 @@ const News = () => {
                                     <label className="block mb-2">이메일</label>
                                     <input
                                         type="email"
-                                        value={isEditing ? editData.email : userInfo.email}
-                                        onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                                        readOnly={!isEditing}
-                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold ${isEditing ? 'bg-blue-50' : 'bg-white'}`}
+                                        value={userInfo.email}
+                                        readOnly
+                                        className={`w-full border-2 border-black rounded-xl p-3 font-jua font-bold `}
                                     />
                                 </div>
-
-                                {/* 비밀번호 필드 */}
-                                <div>
-                                    <label className="block mb-2">비밀번호 {isEditing && "변경"}</label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPassword ? "text" : "password"}
-
-                                            // 수정 중일 때는 입력 중인 값(editData.password)을 보여줌
-                                            value={isEditing ? editData.password
-                                                : userInfo.password}
-
-                                            onChange={(e) => setEditData({ ...editData, password: e.target.value })}
-                                            readOnly={!isEditing}
-                                            placeholder={isEditing ? "새 비밀번호 입력" : ""}
-                                            className={`w-full border-2 border-black rounded-xl p-3 font-jua pr-12 ${isEditing ? 'bg-blue-50' : 'bg-gray-100'}`}
-                                        />
-                                        {/* 수정 중이 아닐 때도 비밀번호를 볼 수 있도록 버튼 상시 활성화 */}
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-black transition-colors"
-                                        >
-                                            {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
-                                        </button>
-                                    </div>
-                                </div>
-
                             </div>
 
                             <hr className="border-gray-300 mb-8" />
 
                             <div className="flex gap-4 space-x-6">
-                                {isEditing ? (
-                                    <button onClick={handleUpdateInfo} className="flex-1 bg-sky-500 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-sky-600">
-                                        <img src={save} alt="save" className='w-12' />
-                                        <span>저장하기</span>
-                                    </button>
-                                ) : (
-                                    <button onClick={() => { setIsEditing(true); setEditData({ ...userInfo, password: "" }) }} className="flex-1 bg-blue-600 text-white active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white text-2xl cursor-pointer py-2 flex items-center justify-center gap-2 hover:bg-indigo-700">
-                                        <img src={correction} alt="correct" className='w-12' />
-                                        <span>수정하기</span>
-                                    </button>
-                                )}
                                 <button
-                                    onClick={() => { setIsProfileModalOpen(false); setIsEditing(false); setShowPassword(false); }}
+                                    onClick={() => { setIsProfileModalOpen(false); }}
                                     className="flex-1 bg-blue-600 cursor-pointer text-white text-2xl active:scale-[0.98] transition-all rounded-[1rem] border-solid border-white py-1 flex items-center justify-center gap-2 hover:bg-indigo-700"
                                 >
                                     <img src={logout} alt="logout" className='w-13' />
-                                    <span>메인 페이지로</span>
+                                    <span>닫기</span>
                                 </button>
                             </div>
                         </div>

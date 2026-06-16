@@ -3,86 +3,138 @@ import webAnalytics from '../assets/web-analytics.png';
 import predictiveAnalytics from '../assets/predictive-chart.png';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 
-// API 서버의 Base URL 설정
-const API_BASE_URL = "http://52.78.151.56:8080";
+// 로컬 호스트 8080으로 변경을 위한 수정 - const API_BASE_URL = 'http://localhost:8080';
+
+
+const API_BASE_URL = 'http://localhost:8080';
+
+// 로그인 전 api
+const publicApi = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: false,
+  headers: {
+    Accept: '*/*',
+    'Content-Type': 'application/json'
+  }
+});
+
+// 로그인 후 api
+const authApi = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: false,
+  headers: {
+    Accept: '*/*',
+    'Content-Type': 'application/json'
+  }
+});
 
 const Login = () => {
-  const navigate = useNavigate(); // 페이지 이동을 위한 함수 선언
+  const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
 
-  // 1. 페이지 접속 시 타이틀 변경
   useEffect(() => {
     document.title = "NewsPin - Login";
   }, []);
 
-  // 2. useForm 초기화 (실시간 검증을 위해 mode: "onChange" 설정)
   const {
     register,
     handleSubmit,
-    formState: { errors, dirtyFields }, // dirtyFields로 입력 여부 확인
+    formState: { errors, dirtyFields },
   } = useForm({
     mode: "onChange"
   });
 
-  const onSubmit = async (data, e) => {
-
-    // 폼 제출 시 브라우저의 기본 새로고침(GET 요청)을 명시적으로 차단
-    if (e) e.preventDefault();
-
+  const onSubmit = async (data) => {
     try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('grantType');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('email');
 
-      const response = await axios({
-        method: 'post',
-        url: `${API_BASE_URL}/user/sign-in`,
-        data: {
-          email: data.email,
-          password: data.password
-        },
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      delete publicApi.defaults.headers.common['Authorization'];
+      delete authApi.defaults.headers.common['Authorization'];
 
-      
-      const resData = response.data;
+      const requestBody = {
+        email: data.email.trim(),
+        password: data.password
+      };
 
-      // [디버깅] 이 로그가 찍히는지 확인하세요. 안 찍힌다면 통신 자체가 실패한 것입니다.
+      console.log("[sign-in] 최종 요청 body:", requestBody);
+
+      const signInResponse = await publicApi.post('/user/sign-in', requestBody);
+
+      const resData = signInResponse.data;
+
       console.log("서버 응답 데이터:", resData);
 
-      // 2. 서버 응답이 SUCCESS가 아니면 여기서 즉시 종료
-      if (!resData || resData.status !== "success") {
-        alert(resData?.message || "로그인 정보를 확인해주세요.");
-        return; // 다음 로직으로 넘어가지 않게 차단
+      const tokenData = resData?.data?.jwtToken;
+      const isSuccess = String(resData?.status || '').toLowerCase() === 'success';
+
+      if (
+        !isSuccess ||
+        !tokenData ||
+        !tokenData.grantType ||
+        !tokenData.accessToken ||
+        !tokenData.refreshToken
+      ) {
+        console.error("로그인 응답 구조 또는 상태 이상:", resData);
+        alert(resData?.message || "로그인에 실패했습니다.");
+        return;
       }
 
-      // 3. 토큰 데이터가 있는지 안전하게 확인
-      const tokenData = resData.data?.jwtToken || resData.data?.signInResponse?.jwtToken;
+      const { grantType, accessToken, refreshToken } = tokenData;
 
-      // 4. 모든 검증(토큰 존재 여부) 통과 후 저장 및 이동
-      if (tokenData && tokenData.accessToken) {
-        const { grantType, accessToken, refreshToken } = tokenData;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('grantType', grantType);
 
-        // 로컬 스토리지 저장
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        localStorage.setItem('grantType', grantType);
+      // 이후 모든 API 요청에 사용할 공통 인증 헤더 설정
+      authApi.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
 
-        // 이후 모든 API 요청에 사용할 공통 인증 헤더 설정
-        axios.defaults.headers.common['Authorization'] = `${grantType} ${accessToken}`;
+      // 로그인 성공 후 사용자 정보 조회
+      try {
+        const meResponse = await authApi.get('/user/me', {
+          headers: {
+            Authorization: `${grantType} ${accessToken}`
+          }
+        });
+        const userData = meResponse?.data?.data;
 
-        alert("로그인 성공!");
-        navigate('/main'); // 드디어 방해 없이 이 줄이 실행됩니다.
-      } else {
-        console.error("Token structure mismatch:", resData);
-        alert("인증 정보가 유효하지 않습니다. 다시 시도해주세요.");
+        if (userData?.userId && userData?.email) {
+          localStorage.setItem('userId', String(userData.userId));
+          localStorage.setItem('email', userData.email);
+        }
+      } catch (meError) {
+        console.error("사용자 정보 조회 실패:", meError.response?.data || meError);
+
+        const meErrorData = meError.response?.data;
+        console.warn("user/me 응답 메시지:", meErrorData?.message || meError.message);
       }
+
+      alert("로그인 성공!");
+      navigate('/main');
 
     } catch (error) {
       // 서버 에러(C999 등) 및 네트워크 오류 처리
-      console.error("Login Error:", error.response?.data);
-      const msg = error.response?.data?.message || "서버 통신 중 오류가 발생했습니다.";
+      console.error("[sign-in] 예외 발생:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      const errorData = error.response?.data;
+
+      const msg =
+        errorData?.message ||
+        errorData?.data?.message ||
+        error.message ||
+        `로그인 요청 실패 (${error.response?.status || 'unknown'})`;
+
       alert(msg);
     }
   };
@@ -140,7 +192,7 @@ const Login = () => {
                 placeholder="newspin@naver.com"
                 {...register("email", { // 이름: email
                   required: "이메일을 입력해주세요.",
-                  pattern: { value: /^[^\s@]+@[^\s@]+\.com$/, message: "올바른 이메일 형식을 입력해주세요!" }
+                  pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "올바른 이메일 형식을 입력해주세요!" }
                 })}
                 className={`w-full px-4 py-2 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('email')}`}
               />
@@ -150,18 +202,23 @@ const Login = () => {
             {/* 비밀번호 필드 */}
             <div className="space-y-2">
               <p className='font-jua text-lg pb-1'>비밀번호</p>
-              <input
-                type="password"
-                placeholder="비밀번호를 입력해주세요."
-                {...register("password", {
-                  required: "비밀번호를 입력해주세요.",
-                  pattern: {
-                    value: authRegex,
-                    message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)"
-                  }
-                })}
-                className={`w-full px-4 py-3 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('password')}`}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="비밀번호를 입력해주세요."
+                  {...register("password", {
+                    required: "비밀번호를 입력해주세요.",
+                  })}
+                  className={`w-full px-4 py-3 border rounded-lg outline-none text-sm transition-all font-bold ${getBorderStyle('password')}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
               {errors.password && <p className="text-red-500 text-xs font-bold">{errors.password.message}</p>}
             </div>
 

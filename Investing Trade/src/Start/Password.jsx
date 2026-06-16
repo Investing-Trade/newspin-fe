@@ -6,14 +6,28 @@ import { useForm } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { Eye, EyeOff } from 'lucide-react';
 
-// 백엔드 서버 주소 설정
-axios.defaults.baseURL = 'http://52.78.151.56:8080';
+// 로컬 호스트 8080으로 변경을 위한 수정 - const API_BASE_URL = 'http://localhost:8080';
+
+const API_BASE_URL = 'http://localhost:8080';
+
+
+const publicApi = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: false,
+  headers: {
+    Accept: '*/*',
+    'Content-Type': 'application/json'
+  }
+});
 
 const Password = () => {
   const navigate = useNavigate();
   const [isCodeSent, setIsCodeSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
 
   useEffect(() => {
     document.title = "NewsPin - Password";
@@ -30,50 +44,82 @@ const Password = () => {
 
   const newPasswordValue = watch("newPassword");
   const authRegex = /^[a-zA-Z가-힣\d@$!%*?&]{8,}$/;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.com$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  /// 통합 제출 핸들러
+  // password API
+  const sendResetCode = (email) => {
+    return publicApi.post('/user/password/send-reset-code', null, {
+      params: {
+        email: (email || "").trim().toLowerCase()
+      }
+    });
+  };
+
+  const resetPassword = (email, code, newPassword) => {
+
+    const payload = {
+      email: String(email || '').trim(),
+      code: String(code || '').trim(),
+      newPassword: String(newPassword || '')
+    };
+
+    return publicApi.post('/user/password/reset', payload);
+  };
+
+  /// 비밀번호 재설정 통합 제출 핸들러
   const onSubmit = async (data) => {
     setIsSubmitting(true);
+
     try {
       if (!isCodeSent) {
-        // 1단계: 회원가입용 인증 발송 API를 사용하여 403 에러 회피
-        const response = await axios.post('/user/email/send-verification', null, {
-          params: { email: data.email }
-        });
+        const response = await sendResetCode(data.email);
 
-        if (response.data.status.toLowerCase() === "success") {
+        const isSuccess =
+          response.status === 200 &&
+          String(response.data?.status || "").toLowerCase() === "success";
+
+        if (isSuccess) {
           alert(`입력하신 ${data.email}로 인증 코드가 발송되었습니다.`);
           setIsCodeSent(true);
+        } else {
+          alert(response.data?.message || "인증 코드 발송에 실패했습니다.");
         }
       } else {
-        // 2단계: 코드 검증 및 새로운 비밀번호로 변경
-        const response = await axios.post('/user/password/reset', {
-          email: data.email,
-          code: data.authCode,
-          newPassword: data.newPassword
-        });
+        const response = await resetPassword(
+          data.email,
+          data.authCode,
+          data.newPassword
+        );
 
-        if (response.data.status.toLowerCase() === "success") {
+        const isSuccess =
+          response.status === 200 &&
+          String(response.data?.status || "").toLowerCase() === "success";
+
+        if (isSuccess) {
           alert("비밀번호가 성공적으로 변경되었습니다. 로그인 페이지로 이동합니다.");
           navigate('/login');
         } else {
-          alert(response.data.message || "비밀번호 재설정에 실패했습니다.");
+          alert(response.data?.message || "비밀번호 재설정에 실패했습니다.");
         }
       }
     } catch (error) {
+      console.error('[PASSWORD API ERROR]', {
+        requestUrl: error.config?.url,
+        requestMethod: error.config?.method,
+        requestHeaders: error.config?.headers,
+        requestData: error.config?.data,
+        responseStatus: error.response?.status,
+        responseData: error.response?.data,
+        message: error.message
+      });
+
       const errorData = error.response?.data;
-      console.error("Error Detail:", errorData);
+      const serverMessage =
+        errorData?.message ||
+        errorData?.error ||
+        "통신 중 오류가 발생했습니다.";
 
-      // 409 Conflict(U002) 발생 시 처리 로직
-      if (!isCodeSent && (error.response?.status === 409 || errorData?.code === 'U002')) {
-
-        alert("계정 확인이 완료되었습니다. 메일함으로 발송된 인증번호를 입력해주세요.");
-        setIsCodeSent(true);
-      } else {
-        const serverMessage = errorData?.message || "통신 중 오류가 발생했습니다.";
-        alert(serverMessage);
-      }
+      alert(serverMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -145,37 +191,57 @@ const Password = () => {
                   <p className='font-bold font-jua text-lg pb-1 text-blue-600'>인증 코드 입력</p>
                   <input
                     type="text"
-                    placeholder="인증 코드 6자리를 입력해주세요."
-                    {...register("authCode", { required: "인증 코드를 입력해주세요." })}
-                    className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('authCode')}`}
+                    placeholder="이메일로 받은 인증 코드를 입력해주세요."
+                    {...register("authCode", {
+                      required: "인증 코드를 입력해주세요.",
+                    })} className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('authCode')}`}
                   />
+                  {errors.authCode && <p className="text-red-500 text-xs font-bold">{errors.authCode.message}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <p className='font-jua text-lg pb-1'>새로운 비밀번호</p>
-                  <input
-                    type="password"
-                    placeholder="새로운 비밀번호를 입력해주세요."
-                    {...register("newPassword", {
-                      required: "새 비밀번호를 입력해주세요.",
-                      pattern: { value: authRegex, message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)" }
-                    })}
-                    className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPassword')}`}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      placeholder="새로운 비밀번호를 입력해주세요."
+                      {...register("newPassword", {
+                        required: "새 비밀번호를 입력해주세요.",
+                        pattern: { value: authRegex, message: "8자 이상 입력해주세요. (영문, 한글, 숫자, 특수문자 조합 가능)" }
+                      })}
+                      className={`w-full px-4 py-3 pr-12 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPassword')}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                   {errors.newPassword && <p className="text-red-500 text-xs font-bold">{errors.newPassword.message}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <p className='font-jua text-lg pb-1'>비밀번호 확인</p>
-                  <input
-                    type="password"
-                    placeholder="비밀번호를 다시 입력해주세요."
-                    {...register("newPasswordConfirm", {
-                      required: "확인을 위해 다시 입력해주세요.",
-                      validate: (val) => val === newPasswordValue || "비밀번호가 일치하지 않습니다."
-                    })}
-                    className={`w-full px-4 py-3 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPasswordConfirm')}`}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPasswordConfirm ? "text" : "password"}
+                      placeholder="비밀번호를 다시 입력해주세요."
+                      {...register("newPasswordConfirm", {
+                        required: "확인을 위해 다시 입력해주세요.",
+                        validate: (val) => val === newPasswordValue || "비밀번호가 일치하지 않습니다."
+                      })}
+                      className={`w-full px-4 py-3 pr-12 border rounded-lg outline-none text-sm font-bold ${getBorderStyle('newPasswordConfirm')}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPasswordConfirm(prev => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showNewPasswordConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                   {errors.newPasswordConfirm && <p className="text-red-500 text-xs font-bold">{errors.newPasswordConfirm.message}</p>}
                 </div>
 
